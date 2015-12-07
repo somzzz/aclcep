@@ -1,5 +1,10 @@
-# aclcep
+# aclcep - Image Segmentation
 Un proiect grozav.
+
+Exploring various parallel solutions for an image segmentation algorithm.
+
+Original project can be found at:
+https://github.com/hanchang/Image-Segmentation
 
 ## Make
 Enter dir and run `make`
