@@ -1,18 +1,34 @@
-// Written by Margrit Betie for Image and Video Computing, January 2006
-// Compile with 
-//   g++ -o hw1-YourLastName  main.c vision.c -lm
-// Run with:
-//   ./hw1-YourLastName input-image.ppm
 
 #include <math.h>
 #include <pthread.h>
+#include <queue>
+
 #include "vision.h"
 #include "helpers.c"
+#include "errors.h"
+
+#define NUM_THREADS 8
+
 
 // #define DEBUG_HISTOGRAM 1
 // #define DEBUG_BINARY 1
 // #define DEBUG_ALPHA 1
 // #define DEBUG_IMAGE 1
+
+typedef struct {
+	int block_x, block_y;
+	int width, height;
+	int entry_x, entry_y;
+} Task;
+
+// Global stuff for all threads
+
+// Workpool
+std::queue<Task> tasks;
+
+static void *do_work(void *args) {
+	return 0;
+}
 
 int main(int argc, char *argv[]) {
 
@@ -21,13 +37,27 @@ int main(int argc, char *argv[]) {
 	int num_images = 1;
 
 	if (argc != 2) {
-		printf("Usage: ./hw3-Chang inputimage.ppm \n");
+		printf("Usage: ./img_seg inputimage.pgm \n");
 		exit(1);
 	}
 
 	// Loop iterators.
 	int i, j, k, x, y, z; 
 	int threshold = 0;
+
+	// Threads vars
+	int status;
+	long t;
+    pthread_t threads[NUM_THREADS];
+    pthread_attr_t attr;
+
+	// Start threads
+	pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+    for (t = 0; t < NUM_THREADS; t++) {
+        status = pthread_create(&threads[t], &attr, do_work, (void *)t);
+        if (status) err_abort(status, "create thread");
+    }
 
 	// Grab image, place in memory.
 	grayscaleimage image;
@@ -41,8 +71,6 @@ int main(int argc, char *argv[]) {
 	ScanPgm(&binary);
 	ScanPgm(&mainobject);
 
-	if (image.xdim > 275)
-		num_images = 2;
 
 	/* ----- Peakiness Detection for Appropriate Threshold Selection ----- 
 	 * -------------------------------------------------------------------
@@ -67,6 +95,7 @@ int main(int argc, char *argv[]) {
 		normalizeBackground(&binary, 0, binary.xdim);
 
 	} // PEAKINESS , num_images 1
+
 
 
 	/* ----- Connected Component -----
@@ -177,12 +206,15 @@ int main(int argc, char *argv[]) {
 		printf("\nTotal components detected: %d\n", object1 + object2);
 	}
 
-	/* ------ Region Merging ------
-	 * ----------------------------
-	 */
+	/* Wait for all threads to complete */
+    for (t = 0; t < NUM_THREADS; t++) {
+        pthread_join(threads[t], NULL);
+    }
+    printf ("Main(): Waited on %d threads. Done.\n", NUM_THREADS);
 
-	printf("\n");
+    /* Clean up and exit */
+    pthread_attr_destroy(&attr);
+    pthread_exit(NULL);
 
-	/* ----- */
 	return 0;
 }
