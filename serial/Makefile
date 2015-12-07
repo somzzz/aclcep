@@ -1,6 +1,8 @@
 all: 
-	g++ -o hw3-Chang hw3-Chang.c vision.c -lm
+	g++ -o img_seg img_seg.c vision.c -lm
+
 debug:
-	g++ -g -O0 -o hw3-Chang hw3-Chang.c vision.c -lm
+	g++ -g -O0 -o img_seg img_seg.c vision.c -lm
+
 clean:
-	rm hw3-Chang binary.pgm connected.ppm
+	rm img_seg binary.pgm connected.ppm

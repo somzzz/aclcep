@@ -8,3 +8,11 @@ then
 	cd ..;
 fi
 
+if [ "$1" == "pthreads" ]
+then
+	cd pthreads;
+	make clean; make;
+	qsub -cwd -q all.q run.sh;
+	cd ..;
+fi
+
