@@ -1,11 +1,12 @@
 # aclcep
 Un proiect grozav.
 
-MAKE:
-Enter dir and run 'make'
+## Make
+Enter dir and run `make`
 
-Run and make on cluster:
+## Run and make on cluster
 Use the run.sh script in the root dir:
 
-./run.sh 'version'
+`./run.sh 'version'`
+
 where 'version' = serial/pthreads/mpi/openmp
