@@ -2,13 +2,16 @@
 #include <math.h>
 #include <pthread.h>
 #include <queue>
+#include <iostream>
 
 #include "vision.h"
 #include "helpers.c"
 #include "errors.h"
 
-#define NUM_THREADS 8
-
+#define BILLION  	1000000000L;
+#define NUM_THREADS 3
+#define CHUNK_SIZE	50
+#define MASTER 		0
 
 // #define DEBUG_HISTOGRAM 1
 // #define DEBUG_BINARY 1
@@ -17,17 +20,313 @@
 
 typedef struct {
 	int block_x, block_y;
-	int width, height;
 	int entry_x, entry_y;
+	int color;
 } Task;
 
 // Global stuff for all threads
+pthread_barrier_t workers_barrier1, workers_barrier2;
+pthread_barrier_t global_barrier1, global_barrier2; 
+
+pthread_mutex_t work_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t work_cv = PTHREAD_COND_INITIALIZER;
+
+pthread_mutex_t done_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t done_cv = PTHREAD_COND_INITIALIZER;
+
+pthread_mutex_t queue_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t visited_mutex = PTHREAD_MUTEX_INITIALIZER;   
+
+grayscaleimage image;
+grayscaleimage binary;
+grayscaleimage mainobject;
+
+rgbimage color_image;
+int color;
+
+long visited;
+bool stop_signal, work;
+int count;
 
 // Workpool
 std::queue<Task> tasks;
 
+static bool is_in_chunk(int i, int j, int csx, int csy) {
+	int csxi = i / CHUNK_SIZE * CHUNK_SIZE;
+	int csyi = j / CHUNK_SIZE * CHUNK_SIZE;
+	return (csxi == csx) && (csyi == csy);
+}
+
+static bool is_in_matrix(int i, int j) {
+	return (0 <= i && i < color_image.xdim)
+		&& (0 <= j && j < color_image.ydim);
+}
+
+static void put_color(int i, int j, int color) {
+
+	// Fun colors!
+	if (color % 7 == 0) {
+		color_image.r[i][j] = 255;
+		color_image.g[i][j] = 255;
+		color_image.b[i][j] = 255;
+	}
+	else if (color % 7 == 1) {
+		color_image.r[i][j] = 0;
+		color_image.g[i][j] = 255;
+		color_image.b[i][j] = 0;
+	}
+	else if (color % 7 == 2) {
+		color_image.r[i][j] = 0;
+		color_image.g[i][j] = 0;
+		color_image.b[i][j] = 255;
+	}
+	else if (color % 7 == 3) {
+		color_image.r[i][j] = 255;
+		color_image.g[i][j] = 255;
+		color_image.b[i][j] = 0;
+	}
+	else if (color % 7 == 4) {
+		color_image.r[i][j] = 255;
+		color_image.g[i][j] = 0;
+		color_image.b[i][j] = 255;
+	}
+	else if (color % 7 == 5) {
+		color_image.r[i][j] = 0;
+		color_image.g[i][j] = 255;
+		color_image.b[i][j] = 255;
+	}
+	else {
+		color_image.r[i][j] = 255;
+		color_image.g[i][j] = 0;
+		color_image.b[i][j] = 0;
+	}
+}
+
+// Thread work
 static void *do_work(void *args) {
+	int status;
+	int x, y;
+	bool has_task;
+
+	long my_id = (long)args;
+
+	Task tsk;
+	std::queue<Task> local_tasks;
+	long local_visited;
+
+	// do work
+	while (1) {
+		printf("Thread %ld waiting on local barrier 0\n", my_id);
+		pthread_barrier_wait (&workers_barrier1);
+		printf("Thread %ld after local barrier 0\n", my_id);
+
+		// Wait for master to put something in queue
+		if (tasks.empty()) {
+			printf("Thread %ld waiting on global barrier 1\n", my_id);
+			pthread_barrier_wait (&global_barrier1);
+			printf("Thread %ld after global barrier 1\n", my_id);
+
+			if (stop_signal) break;
+		}
+
+		printf("Thread %ld waiting on local barrier 1\n", my_id);
+		pthread_barrier_wait (&workers_barrier1);
+		printf("Thread %ld after local barrier 1\n", my_id);
+		// get a task
+		status = pthread_mutex_lock(&queue_mutex);
+		if (status) err_abort(status, "lock mutex");
+
+		if (tasks.size() != 0) {
+			tsk = tasks.front();
+			tasks.pop();
+			has_task = true;
+		} else {
+			has_task = false;
+		}
+
+		status = pthread_mutex_unlock(&queue_mutex);
+		if (status) err_abort(status, "unlock mutex");
+
+		printf("Thread %ld waiting on local barrier 1.1\n", my_id);
+		pthread_barrier_wait (&workers_barrier1);
+		printf("Thread %ld after local barrier 1.1\n", my_id);
+
+		if (has_task) { 
+			// got a task
+			// => do a bfs in the assigned chunk
+			// => create new tasks for the neighbour chunks
+
+			printf("Thread %ld\n", my_id);
+			//printf("Thread %ld, got task with blk_x = %d, blk_y = %d, ex = %d, ey = %d\n",
+			//	my_id, tsk.block_x, tsk.block_y, tsk.entry_x, tsk.entry_y);
+
+			local_visited = 0;
+			std::queue<Task> local_bfs;
+
+			Task root;
+			root.entry_x = tsk.entry_x;
+			root.entry_y = tsk.entry_y;
+			local_bfs.push(root);
+
+			while (!local_bfs.empty()) {
+				local_visited++;
+
+				Task t = local_bfs.front();
+				local_bfs.pop();
+
+				int i = t.entry_x;
+				int j = t.entry_y;
+
+				//printf("Thread %ld, task i=  %d j = %d cell =%d \n", my_id, i, j, binary.value[i][j]);
+
+				// Found an untouched value in a neighbour chunk => give work to another thread
+				if (binary.value[i][j] == UNTOUCHED && !is_in_chunk(i, j, tsk.block_x, tsk.block_y)) {
+					Task new_tsk;
+					new_tsk.entry_x = i; new_tsk.entry_y = j;
+					new_tsk.color = tsk.color;
+					new_tsk.block_x = i / CHUNK_SIZE * CHUNK_SIZE;
+					new_tsk.block_y = j / CHUNK_SIZE * CHUNK_SIZE;
+						
+					//printf("Thread %ld, created new task with blk_x = %d, blk_y = %d, ex = %d, ey = %d\n",
+					//	my_id, new_tsk.block_x, new_tsk.block_y, new_tsk.entry_x, new_tsk.entry_y);
+
+					local_tasks.push(new_tsk);
+				}
+
+				// Found an untouched value in the current chunk => process it
+				if (binary.value[i][j] == UNTOUCHED && is_in_chunk(i, j, tsk.block_x, tsk.block_y)) {
+			
+					// Visit current cell
+					binary.value[i][j] = BLACK;
+					put_color(i, j, tsk.color);
+
+					//std::cout << "thread " << my_id << " visiting cell i = " << i << " j = " << j << std::endl;
+
+					// Add neighbouring cells of interest to the visit queue
+					if (is_in_matrix(i, j - 1) && binary.value[i][j - 1] == UNTOUCHED) {
+						t.entry_x = i; t.entry_y = j - 1;
+						local_bfs.push(t);
+					}
+					if (is_in_matrix(i, j + 1) && binary.value[i][j + 1] == UNTOUCHED) {
+						t.entry_x = i; t.entry_y = j + 1;
+						local_bfs.push(t);
+					}
+					if (is_in_matrix(i - 1, j - 1) && binary.value[i - 1][j - 1] == UNTOUCHED) {
+						t.entry_x = i - 1; t.entry_y = j - 1;
+						local_bfs.push(t);
+					}
+					if (is_in_matrix(i - 1, j) && binary.value[i - 1][j] == UNTOUCHED) {
+						t.entry_x = i - 1; t.entry_y = j;
+						local_bfs.push(t);
+					}
+					if (is_in_matrix(i - 1, j + 1) && binary.value[i - 1][j + 1] == UNTOUCHED) {
+						t.entry_x = i - 1; t.entry_y = j + 1;
+						local_bfs.push(t);
+					}
+					if (is_in_matrix(i + 1, j - 1) && binary.value[i + 1][j - 1] == UNTOUCHED) {
+						t.entry_x = i + 1; t.entry_y = j - 1;
+						local_bfs.push(t);
+					}
+					if (is_in_matrix(i + 1, j) && binary.value[i + 1][j] == UNTOUCHED) {
+						t.entry_x = i + 1; t.entry_y = j;
+						local_bfs.push(t);
+					}
+					if (is_in_matrix(i + 1, j + 1) && binary.value[i + 1][j + 1] == UNTOUCHED) {
+						t.entry_x = i + 1; t.entry_y = j + 1;
+						local_bfs.push(t);
+					}
+				} // end if
+
+			} // endwhile local bfs
+
+			// add work found to queue
+			status = pthread_mutex_lock(&queue_mutex);
+			if (status) err_abort(status, "lock mutex");
+
+			while (!local_tasks.empty()) {
+				tasks.push(local_tasks.front());
+				local_tasks.pop();
+			}
+
+			status = pthread_mutex_unlock(&queue_mutex);
+			if (status) err_abort(status, "unlock mutex");
+		} // if has task
+
+		// Wait all threads to finish computation round
+		printf("Thread %ld waiting on local barrier 2\n", my_id);
+		pthread_barrier_wait (&workers_barrier2);
+		printf("Thread %ld after local barrier 2\n", my_id);
+
+printf("Thread %ld with tasks %d\n", my_id, tasks.size());
+		// check stop condition && signal master
+		// if (tasks.empty()) {
+		// 							printf("Thread %ld waiting on global barrier 2\n", my_id);
+		// 	pthread_barrier_wait (&global_barrier2);
+		// 							printf("Thread %ld after global barrier 2\n", my_id);
+		// }
+
+	} // endwhile thread
+
+    // work done
+	printf("Threads %ld, exiting \n", my_id );
+    pthread_exit(NULL);
+
 	return 0;
+}
+
+static void *master_work(void *args) {
+	int i, j;
+	int status;
+	long my_id = (long)args;
+
+	visited = color_image.xdim * color_image.ydim;
+
+    stop_signal = false;
+    
+    status = pthread_mutex_lock(&work_mutex);
+    if (status) err_abort(status, "lock mutex");
+
+    while (!work) {
+        status = pthread_cond_wait(&work_cv, &work_mutex);
+        if (status) err_abort(status, "wait for condition");
+    }
+
+    status = pthread_mutex_unlock(&work_mutex);
+    if (status) err_abort(status, "unlock mutex");
+
+	for (i = 0; i < color_image.xdim; i++) {
+		for (j = 0; j < color_image.ydim; j++) {
+			if (binary.value[i][j] == UNTOUCHED) {
+				Task tsk;
+    			tsk.block_x = i / CHUNK_SIZE * CHUNK_SIZE;
+    			tsk.block_y = j / CHUNK_SIZE * CHUNK_SIZE;
+    			tsk.entry_x = i; tsk.entry_y = j;
+    			tsk.color = color;
+
+			printf("===========>Thread %ld creating TASk\n", my_id);
+    			tasks.push(tsk);
+
+				// Signal threads to start work
+			printf("Thread %ld waiting on global barrier 1\n", my_id);
+				pthread_barrier_wait (&global_barrier1);
+			printf("Thread %ld after global barrier 1\n", my_id);
+
+    			// Wait for threads to finish object
+			//printf("Thread %ld waiting on global barrier 2\n", my_id);
+				//pthread_barrier_wait (&global_barrier2);
+			//printf("Thread %ld after global barrier 2\n", my_id);
+                color++;
+			}
+		}
+	}
+
+	stop_signal = true;
+
+	// Signal threads to do one last round of work to see the stop_signal
+	// and exit properly
+	pthread_barrier_wait (&global_barrier1);
+	printf("Threads %ld, exiting \n", my_id );
+    pthread_exit(NULL);
 }
 
 int main(int argc, char *argv[]) {
@@ -51,18 +350,27 @@ int main(int argc, char *argv[]) {
     pthread_t threads[NUM_THREADS];
     pthread_attr_t attr;
 
-	// Start threads
+    work = false;
+
+	// Start threads & create barrier
+	pthread_barrier_init (&workers_barrier1, NULL, NUM_THREADS - 1);
+	pthread_barrier_init (&workers_barrier2, NULL, NUM_THREADS - 1);
+	pthread_barrier_init (&global_barrier1, NULL, NUM_THREADS);
+	pthread_barrier_init (&global_barrier2, NULL, NUM_THREADS);
+
 	pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-    for (t = 0; t < NUM_THREADS; t++) {
+
+    status = pthread_create(&threads[0], &attr, master_work, (void *)0);
+    if (status) err_abort(status, "create thread");
+
+    for (t = 1; t < NUM_THREADS; t++) {
         status = pthread_create(&threads[t], &attr, do_work, (void *)t);
         if (status) err_abort(status, "create thread");
     }
 
 	// Grab image, place in memory.
-	grayscaleimage image;
-	grayscaleimage binary;
-	grayscaleimage mainobject;
+
 	char imagename[30];
 	strcpy(image.name, argv[1]);
 	strcpy(binary.name, argv[1]);
@@ -103,15 +411,18 @@ int main(int argc, char *argv[]) {
 	 */
 
 	bool stillUntouched = true;
-
+	
+	std::cout << std::endl;
 	// Initialize by negation.
 	for (i = 0; i < binary.ydim; i++) {
 		for (j = 0; j < binary.xdim; j++) {
 			if (binary.value[i][j] == BLACK) {
 				binary.value[i][j] = UNTOUCHED;
 			}
+			printf("%d ", binary.value[i][j]);
 		}
-	}
+		std::cout << std::endl;
+	}		std::cout << std::endl;
 
 	// Prepare to count objects.
 	int object1 = 0;
@@ -121,17 +432,16 @@ int main(int argc, char *argv[]) {
 
 	// Create a color copy.
 	int color = 1;
-	rgbimage colorimage;
-	colorimage.xdim = image.xdim;
-	colorimage.ydim = image.ydim;
-	colorimage.highestvalue = WHITE;
+	color_image.xdim = image.xdim;
+	color_image.ydim = image.ydim;
+	color_image.highestvalue = WHITE;
 
-	GetImagePpm(&colorimage);
-	for (i = 0; i < colorimage.ydim; i++) {
-		for (j = 0; j < colorimage.xdim; j++) {
-			colorimage.r[i][j] = 255;
-			colorimage.g[i][j] = 255;
-			colorimage.b[i][j] = 255;
+	GetImagePpm(&color_image);
+	for (i = 0; i < color_image.ydim; i++) {
+		for (j = 0; j < color_image.xdim; j++) {
+			color_image.r[i][j] = 255;
+			color_image.g[i][j] = 255;
+			color_image.b[i][j] = 255;
 		}
 	}
 
@@ -141,79 +451,63 @@ int main(int argc, char *argv[]) {
 	int maxi, maxj;
 	int maxx, maxy;
 
-	if (num_images == 1) {
-		for (i = 0; i < colorimage.ydim; i++) {
-			for (j = 0; j < colorimage.xdim; j++) {
-				if (binary.value[i][j] == UNTOUCHED) {
-					// Recurse around that pixel's neighbors.
-					tmparea = recursiveTouch(&binary, &colorimage, i, j, color, 0);
-					//printf("Segment has area %d with color %d.\n", tmparea, color % 6); //flag
+    struct timespec start, stop;
+    double accum;
 
-					object1++;
+    srand(time(NULL));
 
-					if (tmparea < MINAREA && tmparea > 0) {
-						recursiveTouch(&binary, &colorimage, i, j, 0, 0);
-						removeSpecks(&binary, i, j);
-						remove1++;
-					}
+    clock_gettime(CLOCK_REALTIME, &start);
 
-					if (tmparea > maxarea) {
-						maxarea = tmparea;
-						maxi = i;
-						maxj = j;
-					}
+    // Signal master to start working
+    status = pthread_mutex_lock(&work_mutex);
+    if (status) err_abort(status, "lock mutex");
 
-					color++;
-				}
-			}
-		}
-	}
+    work = true;
+    printf("main before signal\n");
+    status = pthread_cond_signal(&work_cv);
+    if (status) err_abort(status, "signal condition");
+        printf("main before signal\n");
 
-	strcpy(colorimage.name, "connected.ppm");
-	OutputPpm(&colorimage);
+    status = pthread_mutex_unlock(&work_mutex);
+    if (status) err_abort(status, "unlock mutex");
+
+	// Wait for all threads to complete
+    for (t = 0; t < NUM_THREADS; t++) {
+        pthread_join(threads[t], NULL);
+    }
+    printf ("Main(): Waited on %d threads. Done.\n", NUM_THREADS);
+
+    clock_gettime(CLOCK_REALTIME, &stop);
+
+
+    // Print time 
+    accum = ( stop.tv_sec - start.tv_sec )
+        + (double)( stop.tv_nsec - start.tv_nsec )
+        	/ (double)BILLION;
+    printf("[PTHREADS] Image segmentation: %lf\n", accum);
+
+
+    // Create output images
+	strcpy(color_image.name, "connected.ppm");
+	OutputPpm(&color_image);
 
 	binary.highestvalue = WHITE;
 	strcpy(binary.name, "binary.pgm");
 	OutputPgm(&binary);
 
 
-	/* ----- Orientation ----- 
-	 * -----------------------
-	 */
-
-	printf("\n");
-
-	// Only calculate orientation and circularity for largest blob.
-	// Find largest blob and mark it specially.
-	if (num_images == 1) {
-		int singlearea = findArea(&mainobject, &binary, 0, binary.xdim);
-		calculateOrientation(&mainobject, 0, mainobject.xdim, singlearea);
-		printf("Components detected: %d\n", object1);
-	}
-	else {
-		int area1 = findArea(&mainobject, &binary, 0, binary.xdim/2);
-		binaryTouch(&mainobject, maxi, maxj);
-		calculateOrientation(&mainobject, 0, binary.xdim/2, area1);
-		// printf("Components detected: %d\n", object1 - remove1);
-
-		printf("\n");
-
-		int area2 = findArea(&mainobject, &binary, binary.xdim/2, binary.xdim);
-		binaryTouch(&mainobject, maxx, maxy);
-		calculateOrientation(&mainobject, binary.xdim/2, binary.xdim, area2);
-		// printf("Components detected: %d\n", object2 - remove2);
-
-		printf("\nTotal components detected: %d\n", object1 + object2);
-	}
-
-	/* Wait for all threads to complete */
-    for (t = 0; t < NUM_THREADS; t++) {
-        pthread_join(threads[t], NULL);
-    }
-    printf ("Main(): Waited on %d threads. Done.\n", NUM_THREADS);
-
     /* Clean up and exit */
     pthread_attr_destroy(&attr);
+
+    pthread_mutex_destroy(&work_mutex);
+    pthread_cond_destroy(&work_cv);
+
+    pthread_mutex_destroy(&done_mutex);
+    pthread_cond_destroy(&done_cv);
+
+    pthread_mutex_destroy(&queue_mutex);
+    pthread_mutex_destroy(&visited_mutex);
+
     pthread_exit(NULL);
 
 	return 0;
