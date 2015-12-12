@@ -1,6 +1,19 @@
 // #define DEBUG_HISTOGRAM 1
 // #define DEBUG_PEAKINESS 1
 // #define DEBUG_ALPHA 1
+#include <queue>
+#include <omp.h>
+struct Task
+{
+	int i_start;
+	int i_stop;
+	int j_start;
+	int j_stop;
+	int seed_i;
+	int seed_j;
+	int color;
+	int chunck;
+};
 
 const int INF = 65535;
 const int WHITE = 255;
@@ -88,6 +101,7 @@ int calculatePeakiness(grayscaleimage* image, int xstart, int xstop)
 #endif
 
 	if (!((xstart == 0) && (xstop == image->xdim))) {
+		printf("You are ever called in calculatePeakiness.....\n");
 		// Contrast normalization.
 		for (i = 1; i < image->ydim; i++) {
 			for (j = xstart + 1; j < xstop - 1; j++) {
@@ -172,11 +186,28 @@ int calculatePeakiness(grayscaleimage* image, int xstart, int xstop)
 #endif
 
 		// Find the maximum peakiness.
-		if (g1 < g2) {
+		/*if (g1 < g2) {
 			peakiness = (double) g1 / (double) gmin;
 		}
 		else {
 			peakiness = (double) g2 / (double) gmin;
+		}*/
+		if (gmin == 0)
+		{
+			gmin = 1;
+			if (g1 < g2) {
+			peakiness = (double) g1 / (double) gmin;
+			}
+			else {
+				peakiness = (double) g2 / (double) gmin;
+			}
+		} else {
+			if (g1 < g2) {
+			peakiness = (double) g1 / (double) gmin;
+			}
+			else {
+				peakiness = (double) g2 / (double) gmin;
+			}
 		}
 
 		if (peakiness > max_peakiness && peakiness != 0 && peakiness < INF) {
@@ -401,6 +432,209 @@ int recursiveTouch(grayscaleimage *binary, rgbimage *output,
 	return area;
 }
 //}}}
+
+/*-------------------------------------------*/
+int searchWork(int *a, int n)
+{
+	int i;
+	for (i = 0; i < n; i++)
+	{
+		if (a[i] == true)
+		{
+			return 1;
+		}
+	}
+	return 0;
+}
+
+/*---------------------------------------------------*/
+int function_Test(struct Task* threads_task)
+{
+	if (threads_task != NULL)
+	{
+		printf("I call function with a task %d %d\n", threads_task->seed_i, threads_task->seed_j);
+		return 1;
+	} 
+	printf("Nothing tasks..............................\n");
+	return 0;
+}
+
+/*------------------------------------------------------*/
+
+struct Task generateTask(int i, int  j, int color, int chunck, int max_x, int max_y)
+{
+	struct Task create_task;
+	create_task.seed_i = i;
+	create_task.seed_j = j;
+	create_task.i_start = (create_task.seed_i / chunck) * chunck;
+	create_task.j_start = (create_task.seed_j / chunck) * chunck;
+	if (create_task.i_start + chunck > max_y)
+	{
+		create_task.i_stop = max_y; 
+	} else {
+		create_task.i_stop = create_task.i_start + chunck;
+	}
+	if (create_task.j_start + chunck > max_x)
+	{
+		create_task.j_stop = max_x; 
+	} else {
+		create_task.j_stop = create_task.j_start + chunck;
+	}
+	return create_task;
+}
+
+/*--------------------------------------------------
+-------OpenMP touch--------------------------------*/
+
+int openmp_Touch(grayscaleimage *binary, rgbimage *output, 
+		int i, int j, int color, int area, struct Task* threads_task, std::queue<struct Task>* my_queue, int nr) 
+{
+	if (threads_task == NULL)
+	{
+		return 0;
+	}
+	nr = omp_get_thread_num();
+	//struct Task new_task;
+	binary->value[i][j] = BLACK;
+	#pragma omp private(area)
+		area++; 
+
+	// Fun colors!
+	if (color % 7 == 0) {
+		output->r[i][j] = 255;
+		output->g[i][j] = 255;
+		output->b[i][j] = 255;
+	}
+	else if (color % 7 == 1) {
+		output->r[i][j] = 0;
+		output->g[i][j] = 255;
+		output->b[i][j] = 0;
+	}
+	else if (color % 7 == 2) {
+		output->r[i][j] = 0;
+		output->g[i][j] = 0;
+		output->b[i][j] = 255;
+	}
+	else if (color % 7 == 3) {
+		output->r[i][j] = 255;
+		output->g[i][j] = 255;
+		output->b[i][j] = 0;
+	}
+	else if (color % 7 == 4) {
+		output->r[i][j] = 255;
+		output->g[i][j] = 0;
+		output->b[i][j] = 255;
+	}
+	else if (color % 7 == 5) {
+		output->r[i][j] = 0;
+		output->g[i][j] = 255;
+		output->b[i][j] = 255;
+	}
+	else {
+		output->r[i][j] = 255;
+		output->g[i][j] = 0;
+		output->b[i][j] = 0;
+	}
+	//go to the left
+    if (j - 1 >= 0 && binary->value[i][j-1] == UNTOUCHED)
+    {
+    	if (j - 1 < threads_task->j_start)
+    	{
+    		//generare de task nou
+    		struct Task new_task = generateTask(i , j - 1, threads_task->color, threads_task->chunck, binary->xdim, binary->ydim);
+    		my_queue->push(new_task);
+    	} else if (j - 1 >= threads_task->j_start) {
+    		area = recursiveTouch(binary, output, i, j-1, color, area);	
+    	}
+    }
+
+    //go to the right
+    if (j + 1 < binary->xdim && binary->value[i][j+1] == UNTOUCHED)
+    {
+    	if (j + 1 >= threads_task->j_stop)
+    	{
+    		//generate a task
+    		struct Task new_task = generateTask(i , j + 1, threads_task->color, threads_task->chunck, binary->xdim, binary->ydim);
+    		my_queue->push(new_task);
+    	} else if (j + 1 < threads_task->j_stop) {
+    		area = recursiveTouch(binary, output, i, j+1, color, area);	
+    	}
+    }
+
+    //go to previous line: left, above, right
+	if (i - 1 >= 0) {
+		if (i - 1 < threads_task->i_start) {
+			if (j- 1 >= 0 && binary->value[i-1][j-1] == UNTOUCHED) {
+				struct Task new_task = generateTask(i - 1, j - 1, threads_task->color, threads_task->chunck, binary->xdim, binary->ydim);
+    			my_queue->push(new_task);
+			}
+			if (binary->value[i-1][j] == UNTOUCHED) {
+				struct Task new_task = generateTask(i - 1, j, threads_task->color, threads_task->chunck, binary->xdim, binary->ydim);
+    			my_queue->push(new_task);	
+			}	
+			if (j + 1 < binary->xdim && binary->value[i-1][j+1] == UNTOUCHED) {
+				struct Task new_task = generateTask(i - 1, j + 1, threads_task->color, threads_task->chunck, binary->xdim, binary->ydim);
+    			my_queue->push(new_task);
+			}
+		} else if (i - 1 >= threads_task->i_start) { // linia i-1 e in patratica threadului corespunzator
+			if (j - 1 >= 0 && binary->value[i-1][j-1] == UNTOUCHED) {
+				if (j - 1 >= threads_task->j_start ) {
+					area = recursiveTouch(binary, output, i-1, j-1, color, area);
+				} else if (j - 1 < threads_task->j_start) {
+					struct Task new_task = generateTask(i - 1, j - 1, threads_task->color, threads_task->chunck, binary->xdim, binary->ydim);
+    				my_queue->push(new_task);
+				}
+			}
+			if (binary->value[i-1][j] == UNTOUCHED) {
+				area = recursiveTouch(binary, output, i-1, j, color, area);
+			}
+			if (j + 1 < binary->xdim && binary->value[i-1][j+1] == UNTOUCHED) {
+				if (j + 1 < threads_task->j_stop) {
+					area = recursiveTouch(binary, output, i-1, j+1, color, area);	
+				} else if (j + 1 >= threads_task->j_stop) {
+					struct Task new_task = generateTask(i - 1, j + 1, threads_task->color, threads_task->chunck, binary->xdim, binary->ydim);
+    				my_queue->push(new_task);	
+				}
+			}
+		}
+	}
+
+	if (i + 1 < binary->ydim) {
+		if (i + 1 >= threads_task->i_stop) { //linia i+1 e in afara patratului threadului respectiv
+			if (j - 1 >= 0 && binary->value[i+1][j-1] == UNTOUCHED) {
+				struct Task new_task = generateTask(i + 1, j - 1, threads_task->color, threads_task->chunck, binary->xdim, binary->ydim);
+    			my_queue->push(new_task);
+			}
+			if (binary->value[i+1][j] == UNTOUCHED) {
+				struct Task new_task = generateTask(i + 1, j, threads_task->color, threads_task->chunck, binary->xdim, binary->ydim);
+    			my_queue->push(new_task);	
+			}
+			if (j + 1 < binary->xdim && binary->value[i+1][j+1] == UNTOUCHED) {
+				struct Task new_task = generateTask(i + 1, j + 1, threads_task->color, threads_task->chunck, binary->xdim, binary->ydim);
+				my_queue->push(new_task);
+			}	
+		} else if (i + 1 < threads_task->i_stop ) { //linia i+1 este in patratica corespunzatoare threadului
+			if (j - 1 >= 0 && binary->value[i+1][j-1] == UNTOUCHED) {
+				if (j - 1 >= threads_task->j_start) {
+					area = recursiveTouch(binary, output, i+1, j-1, color, area);		
+				} else if (j - 1 < threads_task->j_start) {
+					struct Task new_task = generateTask(i + 1, j - 1, threads_task->color, threads_task->chunck, binary->xdim, binary->ydim);
+    				my_queue->push(new_task);	
+				}		
+			}
+			if (binary->value[i+1][j] == UNTOUCHED) {
+				area = recursiveTouch(binary, output, i+1, j, color, area);
+			}
+			if (j + 1 < threads_task->j_stop) {
+				area = recursiveTouch(binary, output, i+1, j+1, color, area);
+			} else if (j + 1 >= threads_task->j_stop) {
+				struct Task new_task = generateTask(i + 1, j + 1, threads_task->color, threads_task->chunck, binary->xdim, binary->ydim);
+    			my_queue->push(new_task);
+			}
+		}
+	}
+	return area;
+}
 
 /* BinaryTouch----------------------------------------------------*/
 /* ------------------------------------------------------------------------*/
