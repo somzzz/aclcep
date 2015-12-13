@@ -1,8 +1,8 @@
 all: 
-	g++ -o img_seg img_seg.c vision.c -lm
+	mpiCC -o img_seg img_seg.c vision.c -lm -w
 
 debug:
-	g++ -g -O0 -o img_seg img_seg.c vision.c -lm
+	mpiCC -g -o img_seg img_seg.c vision.c -lm
 
 clean:
 	rm img_seg binary.pgm connected.ppm
