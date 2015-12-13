@@ -218,7 +218,7 @@ int main(int argc, char *argv[]) {
 											}
 									}
 								}//wnd while bfs
-								memset(my_task, 0, sizeof(struct Task));
+								my_task = NULL;
 							}//end if my_task*/
 							//printf("Thread %d finish his job\n", id);
 							works_threads[id] = false;	
