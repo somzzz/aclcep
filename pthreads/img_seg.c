@@ -9,8 +9,8 @@
 #include "errors.h"
 
 #define BILLION  	1000000000L;
-#define NUM_THREADS 9
-#define CHUNK_SIZE	30
+#define NUM_THREADS 5
+#define CHUNK_SIZE	100
 #define MASTER 		0
 
 // #define DEBUG_HISTOGRAM 1
@@ -116,21 +116,21 @@ static void *do_work(void *args) {
 
 	// do work
 	while (1) {
-		printf("Thread %ld waiting on local barrier 0\n", my_id);
+		//printf("Thread %ld waiting on local barrier 0\n", my_id);
 		pthread_barrier_wait (&workers_barrier1);
-		printf("Thread %ld after local barrier 0\n", my_id);
+		//printf("Thread %ld after local barrier 0\n", my_id);
 
 		// Wait for master to put something in queue
 		if (tasks.empty()) {
 			printf("Thread %ld waiting on global barrier 1\n", my_id);
 			pthread_barrier_wait (&global_barrier1);
 			printf("Thread %ld after global barrier 1\n", my_id);
-			        // wait for work request
+			
+			// wait for work request
 			status = pthread_mutex_lock(&work_mutex);
-
 	        if (status) err_abort(status, "lock mutex");
+
 	        count++;
-	        printf("count is %d\n", count);
 	        status = pthread_cond_wait(&work_cv, &work_mutex);
 	        if (status) err_abort(status, "wait for condition");
 
@@ -141,9 +141,9 @@ static void *do_work(void *args) {
 
 		}
 
-		printf("Thread %ld waiting on local barrier 1\n", my_id);
+		//printf("Thread %ld waiting on local barrier 1\n", my_id);
 		pthread_barrier_wait (&workers_barrier1);
-		printf("Thread %ld after local barrier 1\n", my_id);
+		//printf("Thread %ld after local barrier 1\n", my_id);
 
 		// get a task
 		status = pthread_mutex_lock(&queue_mutex);
@@ -160,9 +160,9 @@ static void *do_work(void *args) {
 		status = pthread_mutex_unlock(&queue_mutex);
 		if (status) err_abort(status, "unlock mutex");
 
-		printf("Thread %ld waiting on local barrier 1.1\n", my_id);
+		//printf("Thread %ld waiting on local barrier 1.1\n", my_id);
 		pthread_barrier_wait (&workers_barrier1);
-		printf("Thread %ld after local barrier 1.1\n", my_id);
+		//printf("Thread %ld after local barrier 1.1\n", my_id);
 
 		if (has_task) { 
 			// got a task
@@ -266,9 +266,9 @@ static void *do_work(void *args) {
 		} // if has task
 
 		// Wait all threads to finish computation round
-		printf("Thread %ld waiting on local barrier 2\n", my_id);
-		pthread_barrier_wait (&workers_barrier2);
-		printf("Thread %ld after local barrier 2\n", my_id);
+		//printf("Thread %ld waiting on local barrier 2\n", my_id);
+		pthread_barrier_wait (&workers_barrier1);
+		//printf("Thread %ld after local barrier 2\n", my_id);
 
 		//printf("Thread %ld with tasks %d\n", my_id, tasks.size());
 		// check stop condition && signal master
@@ -316,14 +316,14 @@ static void *master_work(void *args) {
     			tsk.entry_y = i; tsk.entry_x = j;
     			tsk.color = color;
 
-			printf("===========>Thread %ld creating TASk bx = %d by = %d ex = %d ey = %d -\n", my_id,tsk.block_x, tsk.block_y, tsk.entry_x, tsk.entry_y);
+				//printf("===========>Thread %ld creating TASk bx = %d by = %d ex = %d ey = %d -\n",
+				//my_id,tsk.block_x, tsk.block_y, tsk.entry_x, tsk.entry_y);
     			tasks.push(tsk);
 
 				// Signal threads to start work
-			printf("Thread %ld waiting on global barrier 1\n", my_id);
+				printf("Thread %ld waiting on global barrier 1\n", my_id);
 				pthread_barrier_wait (&global_barrier1);
-			printf("Thread %ld after global barrier 1\n", my_id);
-
+				printf("Thread %ld after global barrier 1\n", my_id);
 
        			while (count < NUM_THREADS - 1);
                 status = pthread_mutex_lock(&work_mutex);
@@ -335,34 +335,35 @@ static void *master_work(void *args) {
 
                 status = pthread_mutex_unlock(&work_mutex);
                 if (status) err_abort(status, "unlock mutex");
+    			
     			// Wait for threads to finish object
-			//printf("Thread %ld waiting on global barrier 2\n", my_id);
+				//printf("Thread %ld waiting on global barrier 2\n", my_id);
 				//pthread_barrier_wait (&global_barrier2);
-			//printf("Thread %ld after global barrier 2\n", my_id);
+				//printf("Thread %ld after global barrier 2\n", my_id);
+                
                 color++;
 			}
 		}
 	}
 
-				printf("Thread %ld waiting on global barrier 1\n", my_id);
-				pthread_barrier_wait (&global_barrier1);
-			printf("Thread %ld after global barrier 1\n", my_id);
+	printf("Thread %ld waiting on global barrier 1\n", my_id);
+	pthread_barrier_wait (&global_barrier1);
+	printf("Thread %ld after global barrier 1\n", my_id);
 
-	       			while (count < NUM_THREADS - 1);
-                status = pthread_mutex_lock(&work_mutex);
-                if (status) err_abort(status, "lock mutex");
+	while (count < NUM_THREADS - 1);
+	status = pthread_mutex_lock(&work_mutex);
+	if (status) err_abort(status, "lock mutex");
                 
-                count = 0;
-                	stop_signal = true;
-                status = pthread_cond_broadcast(&work_cv);
-                if (status) err_abort(status, "signal condition");
+	count = 0;
+	stop_signal = true;
+	status = pthread_cond_broadcast(&work_cv);
+	if (status) err_abort(status, "signal condition");
 
-                status = pthread_mutex_unlock(&work_mutex);
-                if (status) err_abort(status, "unlock mutex");
+	status = pthread_mutex_unlock(&work_mutex);
+	if (status) err_abort(status, "unlock mutex");
 
 	// Signal threads to do one last round of work to see the stop_signal
 	// and exit properly
-
 	printf("Threads %ld, exiting \n", my_id );
     pthread_exit(NULL);
 }
@@ -424,7 +425,6 @@ int main(int argc, char *argv[]) {
 
 	if (use_peakiness && num_images == 1) {
 		threshold = calculatePeakiness(&image, 0, image.xdim);
-		// printf("Threshold: %d\n", threshold);
 
 		// Create a binary output image based on the threshold created.
 		for (i = 0; i < binary.ydim; i++) {
@@ -450,17 +450,14 @@ int main(int argc, char *argv[]) {
 
 	bool stillUntouched = true;
 	
-	//std::cout << std::endl;
 	// Initialize by negation.
 	for (i = 0; i < binary.ydim; i++) {
 		for (j = 0; j < binary.xdim; j++) {
 			if (binary.value[i][j] == BLACK) {
 				binary.value[i][j] = UNTOUCHED;
 			}
-			//printf("%d ", binary.value[i][j]);
 		}
-		//std::cout << std::endl;
-	}		//std::cout << std::endl;
+	}
 
 	// Prepare to count objects.
 	int object1 = 0;
@@ -496,6 +493,7 @@ int main(int argc, char *argv[]) {
 
     clock_gettime(CLOCK_REALTIME, &start);
 
+
     // Signal master to start working
     status = pthread_mutex_lock(&work_mutex);
     if (status) err_abort(status, "lock mutex");
@@ -507,6 +505,7 @@ int main(int argc, char *argv[]) {
 
     status = pthread_mutex_unlock(&work_mutex);
     if (status) err_abort(status, "unlock mutex");
+
 
 	// Wait for all threads to complete
     for (t = 0; t < NUM_THREADS; t++) {
