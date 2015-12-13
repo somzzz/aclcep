@@ -9,8 +9,8 @@
 #include "errors.h"
 
 #define BILLION  	1000000000L;
-#define NUM_THREADS 5
-#define CHUNK_SIZE	50
+#define NUM_THREADS 17
+#define CHUNK_SIZE	20
 #define MASTER 		0
 
 // #define DEBUG_HISTOGRAM 1
@@ -190,34 +190,42 @@ static void *do_work(void *args) {
 					// Add neighbouring cells of interest to the visit queue
 					if (is_in_matrix(i, j - 1) && binary.value[i][j - 1] == UNTOUCHED) {
 						t.entry_y = i; t.entry_x = j - 1;
+						binary.value[i][j - 1] = TOUCH_IN_PROGRESS;
 						local_bfs.push(t);
 					}
 					if (is_in_matrix(i, j + 1) && binary.value[i][j + 1] == UNTOUCHED) {
 						t.entry_y = i; t.entry_x = j + 1;
+						binary.value[i][j + 1] = TOUCH_IN_PROGRESS;
 						local_bfs.push(t);
 					}
 					if (is_in_matrix(i - 1, j - 1) && binary.value[i - 1][j - 1] == UNTOUCHED) {
 						t.entry_y = i - 1; t.entry_x = j - 1;
+						binary.value[i - 1][j - 1] = TOUCH_IN_PROGRESS;
 						local_bfs.push(t);
 					}
 					if (is_in_matrix(i - 1, j) && binary.value[i - 1][j] == UNTOUCHED) {
 						t.entry_y = i - 1; t.entry_x = j;
+						binary.value[i - 1][j] = TOUCH_IN_PROGRESS;
 						local_bfs.push(t);
 					}
 					if (is_in_matrix(i - 1, j + 1) && binary.value[i - 1][j + 1] == UNTOUCHED) {
 						t.entry_y = i - 1; t.entry_x = j + 1;
+						binary.value[i - 1][j + 1] = TOUCH_IN_PROGRESS;
 						local_bfs.push(t);
 					}
 					if (is_in_matrix(i + 1, j - 1) && binary.value[i + 1][j - 1] == UNTOUCHED) {
 						t.entry_y = i + 1; t.entry_x = j - 1;
+						binary.value[i + 1][j - 1] = TOUCH_IN_PROGRESS;
 						local_bfs.push(t);
 					}
 					if (is_in_matrix(i + 1, j) && binary.value[i + 1][j] == UNTOUCHED) {
 						t.entry_y = i + 1; t.entry_x = j;
+						binary.value[i + 1][j] = TOUCH_IN_PROGRESS;
 						local_bfs.push(t);
 					}
 					if (is_in_matrix(i + 1, j + 1) && binary.value[i + 1][j + 1] == UNTOUCHED) {
 						t.entry_y = i + 1; t.entry_x = j + 1;
+						binary.value[i + 1][j + 1] = TOUCH_IN_PROGRESS;
 						local_bfs.push(t);
 					}
 				} // end if
@@ -247,7 +255,6 @@ static void *do_work(void *args) {
 		// Wait for master to put something in queue
 		//printf("Thread %ld tasks = %d\n", my_id, tasks.size());
 
-
 		if (tasks.empty()) {
 			//printf("Thread %ld waiting on global barrier 1\n", my_id);
 			pthread_barrier_wait (&global_barrier1);
@@ -276,7 +283,7 @@ static void *do_work(void *args) {
 	} // endwhile thread
 
     // work done
-	printf("Threads %ld, exiting \n", my_id );
+	// printf("Threads %ld, exiting \n", my_id );
     pthread_exit(NULL);
 
 	return 0;
@@ -286,7 +293,6 @@ static void *master_work(void *args) {
 	int i, j;
 	int status;
 	long my_id = (long)args;
-	std::queue<Task> aux_tasks;
 
     stop_signal = false;
     count = 0;
@@ -361,7 +367,7 @@ static void *master_work(void *args) {
 
 	// Signal threads to do one last round of work to see the stop_signal
 	// and exit properly
-	printf("Threads %ld, exiting \n", my_id );
+	//printf("Threads %ld, exiting \n", my_id );
     pthread_exit(NULL);
 }
 

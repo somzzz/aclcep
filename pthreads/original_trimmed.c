@@ -1,9 +1,12 @@
 #include <math.h>
+#include <time.h>
 
 #include "vision.h"
 #include "helpers.c"
 #include "errors.h"
 
+
+#define BILLION  	1000000000L;
 
 // #define DEBUG_HISTOGRAM 1
 // #define DEBUG_BINARY 1
@@ -77,15 +80,15 @@ int main(int argc, char *argv[]) {
 			if (binary.value[i][j] == BLACK) {
 				binary.value[i][j] = UNTOUCHED;
 			}
-			printf("%d ", binary.value[i][j]);
+			//printf("%d ", binary.value[i][j]);
 		}
-		printf("\n");
+		//printf("\n");
 	}
 
 	binary.highestvalue = WHITE;
 	strcpy(binary.name, "interm_binary.pgm");
 	OutputPgm(&binary);
-	
+
 
 	// Prepare to count objects.
 	int object1 = 0;
@@ -115,7 +118,12 @@ int main(int argc, char *argv[]) {
 	int maxi, maxj;
 	int maxx, maxy;
 
-	if (num_images == 1) {
+    struct timespec start, stop;
+    double accum;
+
+	clock_gettime(CLOCK_REALTIME, &start);
+
+	//if (num_images == 1) {
 		for (i = 0; i < colorimage.ydim; i++) {
 			for (j = 0; j < colorimage.xdim; j++) {
 				if (binary.value[i][j] == UNTOUCHED) {
@@ -141,7 +149,15 @@ int main(int argc, char *argv[]) {
 				}
 			}
 		}
-	}
+	//}
+
+	clock_gettime(CLOCK_REALTIME, &stop);
+
+    // Print time 
+    accum = ( stop.tv_sec - start.tv_sec )
+        + (double)( stop.tv_nsec - start.tv_nsec )
+        	/ (double)BILLION;
+    printf("[SERIAL] Image segmentation: %lf\n", accum);
 
 	strcpy(colorimage.name, "connected.ppm");
 	OutputPpm(&colorimage);
