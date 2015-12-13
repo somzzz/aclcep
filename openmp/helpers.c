@@ -26,8 +26,6 @@ const int MINAREA = 100;
 int i, j, k, x;
 
 void sniperBlur(grayscaleimage* image, int xp, int yp, int times); 
-void backgroundize(grayscaleimage* image, int histogram_max, int i, int j); 
-void gaussianBlur(grayscaleimage* image, int i, int j, int times); 
 
 /* calculatePeakiness------------------------------------------------------*/
 /* ------------------------------------------------------------------------*/
@@ -262,95 +260,6 @@ void normalizeBackground(grayscaleimage* binary, int xstart, int xstop) {
 }
 // }}}
 
-/* calculateOrientation----------------------------------------------------*/
-/* ------------------------------------------------------------------------*/
-// {{{
-void calculateOrientation(grayscaleimage *binary, int xstart, int xstop, int area) {
-	// Average x and y values.
-	double xbar = 0;
-	double ybar = 0;
-	for (i = 0; i < binary->ydim; i++) {
-		for (j = xstart; j < xstop; j++) {
-			if (binary->value[i][j] == UNTOUCHED) {
-				xbar += j;
-				ybar += i;
-			}
-		}
-	}
-	xbar = xbar / area;
-	ybar = ybar / area;
-
-#ifdef DEBUG_ALPHA
-	printf("xbar: %f \n", xbar);
-	printf("ybar: %f \n", ybar);
-	printf("Area for bars: %d \n", area);
-
-	// Make a cross to mark the centroid.
-	for (i = 0; i < binary->ydim; i++) {
-		for (j = xstart; j < xstop; j++) {
-			if (i == (int) ybar && j == (int) xbar) {
-				binary->value[i-2][j] = 128;
-				binary->value[i-1][j] = 128;
-				binary->value[i+1][j] = 128;
-				binary->value[i+2][j] = 128;
-				binary->value[i][j] = 128;
-				binary->value[i][j-2] = 128;
-				binary->value[i][j-1] = 128;
-				binary->value[i][j+1] = 128;
-				binary->value[i][j+2] = 128;
-			}
-		}
-	}
-#endif
-
-	// Calculate the a, b/2, and c values.
-	double a, b, c;
-	for (i = 0; i < binary->ydim; i++) {
-		for (j = xstart; j < xstop; j++) {
-			if (binary->value[i][j] == UNTOUCHED) {
-				a += pow(j - xbar, 2);
-				b += (j - xbar) * (i - ybar);
-				c += pow(i - ybar, 2);
-			}
-		}
-	}
-	b = b * 2;
-
-	// Calculate the angle.
-	double theta = 0;
-	if (a - c == 0) {
-		printf("Divide by zero error.\n");
-	}
-	else {
-		theta = 0.5 * atan(b/(c - a));
-	}
-	// Convert to degrees.
-	theta *= 180/M_PI;
-
-#ifdef DEBUG_ALPHA
-	printf("a: %f\n", a);
-	printf("b: %f\n", b);
-	printf("c: %f\n", c);
-#endif
-
-	printf("Orientation: %f degrees\n", theta); 
-
-	double root = sqrt(pow(b,2) + pow(a-c,2));
-	double emin = (a+c)/2 - (a-c)/2 * ((a-c)/root) - b/2*(b/root);
-	double emax = (a+c)/2 + (a-c)/2 * ((a-c)/root) + b/2*(b/root);
-
-#ifdef DEBUG_ALPHA
-	printf("emin: %f\n", emin);
-	printf("emax: %f\n", emax);
-#endif
-
-	double circularity = emin/emax;
-
-	printf("Circularity: %f\n", circularity);
-
-	return;
-}
-// }}}
 
 /* recursiveTouch----------------------------------------------------------*/
 /* ------------------------------------------------------------------------*/
@@ -447,58 +356,10 @@ int searchWork(int *a, int n)
 	return 0;
 }
 
-/*---------------------------------------------------*/
-int function_Test(struct Task* threads_task)
+/*-----------------------set color------------------------*/
+
+void set_color(rgbimage* output, int i, int j, int color)
 {
-	if (threads_task != NULL)
-	{
-		printf("I call function with a task %d %d\n", threads_task->seed_i, threads_task->seed_j);
-		return 1;
-	} 
-	printf("Nothing tasks..............................\n");
-	return 0;
-}
-
-/*------------------------------------------------------*/
-
-struct Task generateTask(int i, int  j, int color, int chunck, int max_x, int max_y)
-{
-	struct Task create_task;
-	create_task.seed_i = i;
-	create_task.seed_j = j;
-	create_task.i_start = (create_task.seed_i / chunck) * chunck;
-	create_task.j_start = (create_task.seed_j / chunck) * chunck;
-	if (create_task.i_start + chunck > max_y)
-	{
-		create_task.i_stop = max_y; 
-	} else {
-		create_task.i_stop = create_task.i_start + chunck;
-	}
-	if (create_task.j_start + chunck > max_x)
-	{
-		create_task.j_stop = max_x; 
-	} else {
-		create_task.j_stop = create_task.j_start + chunck;
-	}
-	return create_task;
-}
-
-/*--------------------------------------------------
--------OpenMP touch--------------------------------*/
-
-int openmp_Touch(grayscaleimage *binary, rgbimage *output, 
-		int i, int j, int color, int area, struct Task* threads_task, std::queue<struct Task>* my_queue, int nr) 
-{
-	if (threads_task == NULL)
-	{
-		return 0;
-	}
-	nr = omp_get_thread_num();
-	//struct Task new_task;
-	binary->value[i][j] = BLACK;
-	#pragma omp private(area)
-		area++; 
-
 	// Fun colors!
 	if (color % 7 == 0) {
 		output->r[i][j] = 255;
@@ -535,6 +396,51 @@ int openmp_Touch(grayscaleimage *binary, rgbimage *output,
 		output->g[i][j] = 0;
 		output->b[i][j] = 0;
 	}
+}
+
+/*------------------------------------------------------*/
+
+struct Task generateTask(int x_coord, int  y_coord, int color, int chunck, int max_x, int max_y)
+{
+	struct Task create_task;
+	create_task.seed_i = x_coord;
+	create_task.seed_j = y_coord;
+	//rintf("Detect floatig point operation %d\n", chunck);
+	if (chunck != 0) {
+		create_task.i_start = (create_task.seed_i / chunck) * chunck;
+		create_task.j_start = (create_task.seed_j / chunck) * chunck;
+	}
+	if (create_task.i_start + chunck > max_y)
+	{
+		create_task.i_stop = max_y; 
+	} else {
+		create_task.i_stop = create_task.i_start + chunck;
+	}
+	if (create_task.j_start + chunck > max_x)
+	{
+		create_task.j_stop = max_x; 
+	} else {
+		create_task.j_stop = create_task.j_start + chunck;
+	}
+	return create_task;
+}
+
+/*--------------------------------------------------
+-------OpenMP touch--------------------------------*/
+
+int openmp_Touch(grayscaleimage *binary, rgbimage *output, 
+		int i, int j, int color, int area, struct Task* threads_task, std::queue<struct Task>* my_queue, int nr) 
+{
+	if (threads_task == NULL)
+	{
+		return 0;
+	}
+	nr = omp_get_thread_num();
+	//struct Task new_task;
+	binary->value[i][j] = BLACK;
+	#pragma omp private(area)
+		area++; 
+	set_color(output, i, j, color);
 	//go to the left
     if (j - 1 >= 0 && binary->value[i][j-1] == UNTOUCHED)
     {
@@ -636,46 +542,6 @@ int openmp_Touch(grayscaleimage *binary, rgbimage *output,
 	return area;
 }
 
-/* BinaryTouch----------------------------------------------------*/
-/* ------------------------------------------------------------------------*/
-// {{{
-void binaryTouch(grayscaleimage *binary, int i, int j) {
-	binary->value[i][j] = UNTOUCHED;
-
-	if (j - 1 >= 0 && binary->value[i][j-1] == BLACK) {
-		binaryTouch(binary, i, j-1);
-	}
-	if (j + 1 < binary->xdim && binary->value[i][j+1] == BLACK) {
-		binaryTouch(binary, i, j+1);
-	}
-
-	if (i - 1 >= 0) {
-		if (j - 1 >= 0 && binary->value[i-1][j-1] == BLACK) {
-			binaryTouch(binary, i-1, j-1);
-		}
-		if (binary->value[i-1][j] == BLACK) {
-			binaryTouch(binary, i-1, j);
-		}
-		if (j + 1 < binary->xdim && binary->value[i-1][j+1] == BLACK) {
-			binaryTouch(binary, i-1, j+1);
-		}
-	}
-
-	if (i + 1 < binary->ydim) {
-		if (j - 1 >= 0 && binary->value[i+1][j-1] == BLACK) {
-			binaryTouch(binary, i+1, j-1);
-		}
-		if (binary->value[i+1][j] == BLACK) {
-			binaryTouch(binary, i+1, j);
-		}
-		if (j + 1 < binary->xdim && binary->value[i+1][j+1] == BLACK) {
-			binaryTouch(binary, i+1, j+1);
-		}
-	}
-
-	return;
-}
-//}}}
 
 /* removeSpecks------------------------------------------------------------*/
 /* ------------------------------------------------------------------------*/
@@ -720,40 +586,6 @@ void removeSpecks(grayscaleimage *binary, int i, int j) {
 
 /* findArea ---------------------------------------------------------------*/
 /* ------------------------------------------------------------------------*/
-//{{{
-int findArea(grayscaleimage* main, grayscaleimage* binary, int a, int z) {
-	// Hack to make sure entire single image is counted in area.
-	int tmp = 0;
-	for (i = 0; i < main->ydim; i++) {
-		for (j = a; j < z; j++) {
-			if (binary->value[i][j] == BLACK) {
-				main->value[i][j] = UNTOUCHED;
-				tmp++;
-			}
-			else {
-				main->value[i][j] = WHITE;
-			}
-		}
-	}
-
-	printf("Calculated Area: %f um^2\n", tmp * 0.667223);
-
-	return tmp;
-}
-//}}}
-
-/* ----- Blur Image for Reduction of Background Noise -----
- * --------------------------------------------------------
- */
-
-//{{{
-void backgroundize(grayscaleimage* image, int histogram_max, int xp, int yp) {
-	image->value[xp][yp] = 
-		(image->value[xp-1][yp-1] + 
-		 image->value[xp-1][yp] + 
-		 image->value[xp][yp-1]) / 3; 
-}
-//}}}
 
 //{{{
 void sniperBlur(grayscaleimage* image, int xp, int yp, int times) {
@@ -779,102 +611,6 @@ void sniperBlur(grayscaleimage* image, int xp, int yp, int times) {
 	}
 
 	return;
-}
-//}}}
-
-//{{{
-void simpleBlur(grayscaleimage image, int times) {
-	int i, j, k;
-	for (k = 0; k < times; k++) {
-		for (i = 1; i < image.ydim - 1; i++) {
-			for (j = 1; j < image.xdim - 1; j++) {
-				int tmp = 
-					image.value[i-1][j-1] + 
-					image.value[i-1][j] + 
-					image.value[i-1][j+1] + 
-
-					image.value[i][j-1] + 
-					2 * image.value[i][j] + 
-					image.value[i][j+1] + 
-
-					image.value[i+1][j-1] + 
-					image.value[i+1][j] + 
-					image.value[i+1][j+1]; 
-
-				image.value[i][j] = tmp / 10;
-			}
-		}
-	}
-	image.highestvalue = WHITE;
-}
-//}}}
-
-//{{{
-void mediumBlur(grayscaleimage image, int times) {
-	int i, j, k;
-	for (k = 0; k < times; k++) {
-		for (i = 1; i < image.ydim - 1; i++) {
-			for (j = 1; j < image.xdim - 1; j++) {
-				int tmp = 
-					image.value[i-1][j-1] + 
-					2 * image.value[i-1][j] + 
-					image.value[i-1][j+1] + 
-
-					2 * image.value[i][j-1] + 
-					6 * image.value[i][j] + 
-					2 * image.value[i][j+1] + 
-
-					image.value[i+1][j-1] + 
-					2 * image.value[i+1][j] + 
-					image.value[i+1][j+1]; 
-
-				image.value[i][j] = tmp / 18;
-			}
-		}
-	}
-	image.highestvalue = WHITE;
-}
-//}}}
-
-//{{{
-void gaussianBlur(grayscaleimage* image, int i, int j, int times) {
-	if (i < 3 || j < 3 || i > image->ydim - 3 || j > image->xdim - 3) {}
-	else {
-		for (k = 0; k < times; k++) {
-			int tmp = 
-				2 * image->value[i-2][j-2] + 
-				4 * image->value[i-2][j-1] + 
-				5 * image->value[i-2][j] + 
-				4 * image->value[i-2][j+1] + 
-				2 * image->value[i-2][j+2] + 
-
-				4 * image->value[i-1][j-2] +
-				9 * image->value[i-1][j-1] + 
-				12 * image->value[i-1][j] + 
-				9 * image->value[i-1][j+1] + 
-				4 * image->value[i-1][j+2] +
-
-				9 * image->value[i][j-2] + 
-				12 * image->value[i][j-1] + 
-				15 * image->value[i][j] + 
-				12 * image->value[i][j+1] + 
-				9 * image->value[i][j+2] + 
-
-				4 * image->value[i+1][j-2] +
-				9 * image->value[i+1][j-1] + 
-				12 * image->value[i+1][j] + 
-				9 * image->value[i+1][j+1] + 
-				4 * image->value[i+1][j+2] +
-
-				2 * image->value[i+2][j-2] + 
-				4 * image->value[i+2][j-1] + 
-				5 * image->value[i+2][j] + 
-				4 * image->value[i+2][j+1] + 
-				2 * image->value[i+2][j+2]; 
-
-			image->value[i][j] = tmp / 115;
-		}
-	}
 }
 //}}}
 

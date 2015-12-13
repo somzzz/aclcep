@@ -23,9 +23,6 @@ int main(int argc, char *argv[]) {
 		printf("Usage: ./hw3-Chang inputimage.ppm \n");
 		exit(1);
 	}
-	//task_queue.push(1);
-	//task_queue.push(1);
-	//printf("pop a value from queue %d\n", task_queue.front());
 
 	// Loop iterators.
 	int i, j, k, x, y, z; 
@@ -46,16 +43,6 @@ int main(int argc, char *argv[]) {
 	 * -------------------------------------------------------------------
 	 */
 
-	/* printf("--------------------------------------------\n");
-	 for (i = 0; i < binary.xdim; i++)
-	 {
-	 	for (j = 0; j < binary.ydim; j++)
-	 	{
-	 		printf("%d ", binary.value[i][j]);
-	 	}
-	 	printf("\n");
-	 }
-    */
 	if (use_peakiness && num_images == 1) {
 		threshold = calculatePeakiness(&image, 0, image.xdim);
 	        printf("Threshold: %d\n", threshold);
@@ -94,9 +81,6 @@ int main(int argc, char *argv[]) {
 
 	// Prepare to count objects.
 	int object1 = 0;
-	int object2 = 0;
-	int remove1 = 0;
-	int remove2 = 0;
 
 	// Create a color copy.
 	int color = 1;
@@ -116,9 +100,6 @@ int main(int argc, char *argv[]) {
 
 	// Find the first untouched pixel.
 	unsigned long tmparea = 0;
-	unsigned long maxarea = 0;
-	int maxi, maxj;
-	int maxx, maxy;
 	int nr_threads = 6;
 	/*Prepare for parallel the region*/
 	//calculeaza latura patratului
@@ -140,26 +121,7 @@ int main(int argc, char *argv[]) {
 	for (i = 0; i < colorimage.ydim; i++) {
 			for (j = 0; j < colorimage.xdim; j++) {
 				if (binary.value[i][j] == UNTOUCHED) {
-					process_task.seed_i = i;
-					process_task.seed_j = j;
-					process_task.i_start = (process_task.seed_i / latura) * latura;
-					process_task.j_start = (process_task.seed_j / latura) * latura;
-					//find i stop
-					if (process_task.i_start + latura > colorimage.ydim)
-					{
-						process_task.i_stop = colorimage.ydim; 
-					} else {
-						process_task.i_stop = process_task.i_start + latura;
-					}
-					//find j stop
-					if (process_task.j_start + latura > colorimage.xdim)
-					{
-						process_task.j_stop = colorimage.xdim; 
-					} else {
-						process_task.j_stop = process_task.j_start + latura;
-					}
-					process_task.color = color;
-					process_task.chunck = latura;
+					process_task = generateTask(i, j, color, latura, colorimage.xdim, colorimage.ydim);
 					task_queue.push(process_task);
 					//tmparea = recursiveTouch(&binary, &colorimage, i, j, color, 0);
 					#pragma omp parallel private(my_task, id) firstprivate(i, j) shared(ok, task_queue, works_threads)
@@ -196,16 +158,6 @@ int main(int argc, char *argv[]) {
 	//binary.highestvalue = WHITE;
 	strcpy(binary.name, "binary.pgm");
 	OutputPgm(&binary);
-
-
-	printf("\n");
-
-	//printf("Components detected: %d\n", object1);
-	
-	/* ------ Region Merging ------
-	 * ----------------------------
-	 */
-
 
 	printf("\n");
 
