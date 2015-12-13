@@ -105,12 +105,12 @@ void ScanPgm(grayscaleimage *image)
     printf("File %s does not start with header P2 or P5\n", image->name);
     printf("Not a PGM file!\n");
   }
-  
+  //printf("Value of buff is %s\n", buff);
   /* Read the dimensions and the highest pixel value of the image: */
   image->xdim =  (int) GetNextSignificantNumber(inputfp);
   image->ydim =  (int) GetNextSignificantNumber(inputfp);
   image->highestvalue =  (int) GetNextSignificantNumber(inputfp);
-
+  //printf("Xdim %d Ydim %d highest value %d\n", image->xdim, image->ydim, image->highestvalue);
   // Allocate memory space for pixel values:
   GetImagePgm(image);
 
@@ -131,7 +131,13 @@ void ScanPgm(grayscaleimage *image)
       for(x = 0; x < image->xdim; x++)
         image->value[y][x] = (unsigned char) fgetc(inputfp);
   }
-
+  /*printf("In helper image dims %d %d\n", image->xdim, image->ydim);
+  for (y = 0; y < image->ydim; y++)
+  {
+	for (x = 0; x < image->xdim; x++)
+		printf("%d ", image->value[y][x]);
+	printf("\n");
+  }*/
   fclose(inputfp);
 }
 
@@ -150,7 +156,7 @@ void ScanPpm(rgbimage *image)
   }
 
   fscanf(inputfp, "%s\n", buff);
-  if ((strcmp(buff, "P3") != 0) && (strcmp(buff, "P6") != 0)) {  
+  if ((strcmp(buff, "P3") != 0) || (strcmp(buff, "P6") != 0)) {  
     printf("File %s does not start with header P3 or P6\n", image->name);
     printf("Not a Ppm file!\n");
   }
