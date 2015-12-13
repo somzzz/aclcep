@@ -82,6 +82,10 @@ int main(int argc, char *argv[]) {
 		printf("\n");
 	}
 
+	binary.highestvalue = WHITE;
+	strcpy(binary.name, "interm_binary.pgm");
+	OutputPgm(&binary);
+	
 
 	// Prepare to count objects.
 	int object1 = 0;

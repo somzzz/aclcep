@@ -9,8 +9,8 @@
 #include "errors.h"
 
 #define BILLION  	1000000000L;
-#define NUM_THREADS 9
-#define CHUNK_SIZE	50
+#define NUM_THREADS 5
+#define CHUNK_SIZE	30
 #define MASTER 		0
 
 // #define DEBUG_HISTOGRAM 1
@@ -51,15 +51,15 @@ int count;
 // Workpool
 std::queue<Task> tasks;
 
-static bool is_in_chunk(int i, int j, int csx, int csy) {
-	int csxi = i / CHUNK_SIZE * CHUNK_SIZE;
-	int csyi = j / CHUNK_SIZE * CHUNK_SIZE;
+static bool is_in_chunk(int i, int j, int csy, int csx) {
+	int csxi = j / CHUNK_SIZE * CHUNK_SIZE;
+	int csyi = i / CHUNK_SIZE * CHUNK_SIZE;
 	return (csxi == csx) && (csyi == csy);
 }
 
 static bool is_in_matrix(int i, int j) {
-	return (0 <= i && i < color_image.xdim)
-		&& (0 <= j && j < color_image.ydim);
+	return (0 <= i && i < binary.ydim)
+		&& (0 <= j && j < binary.xdim);
 }
 
 static void put_color(int i, int j, int color) {
@@ -127,24 +127,24 @@ static void *do_work(void *args) {
 			printf("Thread %ld after global barrier 1\n", my_id);
 			        // wait for work request
 			status = pthread_mutex_lock(&work_mutex);
-        if (status) err_abort(status, "lock mutex");
-        count++;
-        printf("count is %d\n", count);
-        status = pthread_cond_wait(&work_cv, &work_mutex);
-        if (status) err_abort(status, "wait for condition");
 
-        status = pthread_mutex_unlock(&work_mutex);
-        if (status) err_abort(status, "unlock mutex");
+	        if (status) err_abort(status, "lock mutex");
+	        count++;
+	        printf("count is %d\n", count);
+	        status = pthread_cond_wait(&work_cv, &work_mutex);
+	        if (status) err_abort(status, "wait for condition");
 
-		}
-
-
+	        status = pthread_mutex_unlock(&work_mutex);
+	        if (status) err_abort(status, "unlock mutex");
 
 			if (stop_signal) break;
+
+		}
 
 		printf("Thread %ld waiting on local barrier 1\n", my_id);
 		pthread_barrier_wait (&workers_barrier1);
 		printf("Thread %ld after local barrier 1\n", my_id);
+
 		// get a task
 		status = pthread_mutex_lock(&queue_mutex);
 		if (status) err_abort(status, "lock mutex");
@@ -169,7 +169,7 @@ static void *do_work(void *args) {
 			// => do a bfs in the assigned chunk
 			// => create new tasks for the neighbour chunks
 
-			printf("Thread %ld\n", my_id);
+			//printf("Thread %ld\n", my_id);
 			//printf("Thread %ld, got task with blk_x = %d, blk_y = %d, ex = %d, ey = %d\n",
 			//	my_id, tsk.block_x, tsk.block_y, tsk.entry_x, tsk.entry_y);
 
@@ -177,8 +177,8 @@ static void *do_work(void *args) {
 			std::queue<Task> local_bfs;
 
 			Task root;
-			root.entry_x = tsk.entry_x;
-			root.entry_y = tsk.entry_y;
+			root.entry_x = tsk.entry_x; //coloane
+			root.entry_y = tsk.entry_y; // linii
 			local_bfs.push(root);
 
 			while (!local_bfs.empty()) {
@@ -187,18 +187,18 @@ static void *do_work(void *args) {
 				Task t = local_bfs.front();
 				local_bfs.pop();
 
-				int i = t.entry_x;
-				int j = t.entry_y;
+				int i = t.entry_y;
+				int j = t.entry_x;
 
 				//printf("Thread %ld, task i=  %d j = %d cell =%d \n", my_id, i, j, binary.value[i][j]);
 
 				// Found an untouched value in a neighbour chunk => give work to another thread
-				if (binary.value[i][j] == UNTOUCHED && !is_in_chunk(i, j, tsk.block_x, tsk.block_y)) {
+				if (binary.value[i][j] == UNTOUCHED && !is_in_chunk(i, j, tsk.block_y, tsk.block_x)) {
 					Task new_tsk;
-					new_tsk.entry_x = i; new_tsk.entry_y = j;
+					new_tsk.entry_y = i; new_tsk.entry_x = j;
 					new_tsk.color = tsk.color;
-					new_tsk.block_x = i / CHUNK_SIZE * CHUNK_SIZE;
-					new_tsk.block_y = j / CHUNK_SIZE * CHUNK_SIZE;
+					new_tsk.block_y = i / CHUNK_SIZE * CHUNK_SIZE;
+					new_tsk.block_x = j / CHUNK_SIZE * CHUNK_SIZE;
 						
 					//printf("Thread %ld, created new task with blk_x = %d, blk_y = %d, ex = %d, ey = %d\n",
 					//	my_id, new_tsk.block_x, new_tsk.block_y, new_tsk.entry_x, new_tsk.entry_y);
@@ -207,7 +207,7 @@ static void *do_work(void *args) {
 				}
 
 				// Found an untouched value in the current chunk => process it
-				if (binary.value[i][j] == UNTOUCHED && is_in_chunk(i, j, tsk.block_x, tsk.block_y)) {
+				if (binary.value[i][j] == UNTOUCHED && is_in_chunk(i, j, tsk.block_y, tsk.block_x)) {
 			
 					// Visit current cell
 					binary.value[i][j] = BLACK;
@@ -217,35 +217,35 @@ static void *do_work(void *args) {
 
 					// Add neighbouring cells of interest to the visit queue
 					if (is_in_matrix(i, j - 1) && binary.value[i][j - 1] == UNTOUCHED) {
-						t.entry_x = i; t.entry_y = j - 1;
+						t.entry_y = i; t.entry_x = j - 1;
 						local_bfs.push(t);
 					}
 					if (is_in_matrix(i, j + 1) && binary.value[i][j + 1] == UNTOUCHED) {
-						t.entry_x = i; t.entry_y = j + 1;
+						t.entry_y = i; t.entry_x = j + 1;
 						local_bfs.push(t);
 					}
 					if (is_in_matrix(i - 1, j - 1) && binary.value[i - 1][j - 1] == UNTOUCHED) {
-						t.entry_x = i - 1; t.entry_y = j - 1;
+						t.entry_y = i - 1; t.entry_x = j - 1;
 						local_bfs.push(t);
 					}
 					if (is_in_matrix(i - 1, j) && binary.value[i - 1][j] == UNTOUCHED) {
-						t.entry_x = i - 1; t.entry_y = j;
+						t.entry_y = i - 1; t.entry_x = j;
 						local_bfs.push(t);
 					}
 					if (is_in_matrix(i - 1, j + 1) && binary.value[i - 1][j + 1] == UNTOUCHED) {
-						t.entry_x = i - 1; t.entry_y = j + 1;
+						t.entry_y = i - 1; t.entry_x = j + 1;
 						local_bfs.push(t);
 					}
 					if (is_in_matrix(i + 1, j - 1) && binary.value[i + 1][j - 1] == UNTOUCHED) {
-						t.entry_x = i + 1; t.entry_y = j - 1;
+						t.entry_y = i + 1; t.entry_x = j - 1;
 						local_bfs.push(t);
 					}
 					if (is_in_matrix(i + 1, j) && binary.value[i + 1][j] == UNTOUCHED) {
-						t.entry_x = i + 1; t.entry_y = j;
+						t.entry_y = i + 1; t.entry_x = j;
 						local_bfs.push(t);
 					}
 					if (is_in_matrix(i + 1, j + 1) && binary.value[i + 1][j + 1] == UNTOUCHED) {
-						t.entry_x = i + 1; t.entry_y = j + 1;
+						t.entry_y = i + 1; t.entry_x = j + 1;
 						local_bfs.push(t);
 					}
 				} // end if
@@ -270,7 +270,7 @@ static void *do_work(void *args) {
 		pthread_barrier_wait (&workers_barrier2);
 		printf("Thread %ld after local barrier 2\n", my_id);
 
-printf("Thread %ld with tasks %d\n", my_id, tasks.size());
+		//printf("Thread %ld with tasks %d\n", my_id, tasks.size());
 		// check stop condition && signal master
 		// if (tasks.empty()) {
 		// 							printf("Thread %ld waiting on global barrier 2\n", my_id);
@@ -292,8 +292,6 @@ static void *master_work(void *args) {
 	int status;
 	long my_id = (long)args;
 
-	visited = color_image.xdim * color_image.ydim;
-
     stop_signal = false;
     count = 0;
     
@@ -308,13 +306,14 @@ static void *master_work(void *args) {
     status = pthread_mutex_unlock(&work_mutex);
     if (status) err_abort(status, "unlock mutex");
 
-	for (i = 0; i < color_image.xdim; i++) {
-		for (j = 0; j < color_image.ydim; j++) {
+	for (i = 0; i < color_image.ydim; i++) {
+		for (j = 0; j < color_image.xdim; j++) {
+
 			if (binary.value[i][j] == UNTOUCHED) {
 				Task tsk;
-    			tsk.block_x = i / CHUNK_SIZE * CHUNK_SIZE;
-    			tsk.block_y = j / CHUNK_SIZE * CHUNK_SIZE;
-    			tsk.entry_x = i; tsk.entry_y = j;
+    			tsk.block_y = i / CHUNK_SIZE * CHUNK_SIZE;
+    			tsk.block_x = j / CHUNK_SIZE * CHUNK_SIZE;
+    			tsk.entry_y = i; tsk.entry_x = j;
     			tsk.color = color;
 
 			printf("===========>Thread %ld creating TASk bx = %d by = %d ex = %d ey = %d -\n", my_id,tsk.block_x, tsk.block_y, tsk.entry_x, tsk.entry_y);
@@ -345,7 +344,6 @@ static void *master_work(void *args) {
 		}
 	}
 
-	stop_signal = true;
 				printf("Thread %ld waiting on global barrier 1\n", my_id);
 				pthread_barrier_wait (&global_barrier1);
 			printf("Thread %ld after global barrier 1\n", my_id);
@@ -355,6 +353,7 @@ static void *master_work(void *args) {
                 if (status) err_abort(status, "lock mutex");
                 
                 count = 0;
+                	stop_signal = true;
                 status = pthread_cond_broadcast(&work_cv);
                 if (status) err_abort(status, "signal condition");
 
@@ -502,10 +501,9 @@ int main(int argc, char *argv[]) {
     if (status) err_abort(status, "lock mutex");
 
     work = true;
-    printf("main before signal\n");
+
     status = pthread_cond_signal(&work_cv);
     if (status) err_abort(status, "signal condition");
-        printf("main before signal\n");
 
     status = pthread_mutex_unlock(&work_mutex);
     if (status) err_abort(status, "unlock mutex");
