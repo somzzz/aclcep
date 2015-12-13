@@ -30,3 +30,7 @@
 # Custom stuff (our executables )
 img_seg
 
+# Images
+# http://stackoverflow.com/questions/8006393/force-add-despite-the-gitignore-file
+*.pgm
+*.ppm
