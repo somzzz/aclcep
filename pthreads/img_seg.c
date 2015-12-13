@@ -9,7 +9,7 @@
 #include "errors.h"
 
 #define BILLION  	1000000000L;
-#define NUM_THREADS 5
+#define NUM_THREADS 9
 #define CHUNK_SIZE	30
 #define MASTER 		0
 
@@ -469,7 +469,7 @@ int main(int argc, char *argv[]) {
 	int remove2 = 0;
 
 	// Create a color copy.
-	int color = 1;
+	color = 1;
 	color_image.xdim = image.xdim;
 	color_image.ydim = image.ydim;
 	color_image.highestvalue = WHITE;
