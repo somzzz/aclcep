@@ -10,7 +10,7 @@
 
 #define BILLION  	1000000000L;
 #define NUM_THREADS 5
-#define CHUNK_SIZE	100
+#define CHUNK_SIZE	50
 #define MASTER 		0
 
 // #define DEBUG_HISTOGRAM 1
@@ -116,34 +116,6 @@ static void *do_work(void *args) {
 
 	// do work
 	while (1) {
-		//printf("Thread %ld waiting on local barrier 0\n", my_id);
-		pthread_barrier_wait (&workers_barrier1);
-		//printf("Thread %ld after local barrier 0\n", my_id);
-
-		// Wait for master to put something in queue
-		if (tasks.empty()) {
-			printf("Thread %ld waiting on global barrier 1\n", my_id);
-			pthread_barrier_wait (&global_barrier1);
-			printf("Thread %ld after global barrier 1\n", my_id);
-			
-			// wait for work request
-			status = pthread_mutex_lock(&work_mutex);
-	        if (status) err_abort(status, "lock mutex");
-
-	        count++;
-	        status = pthread_cond_wait(&work_cv, &work_mutex);
-	        if (status) err_abort(status, "wait for condition");
-
-	        status = pthread_mutex_unlock(&work_mutex);
-	        if (status) err_abort(status, "unlock mutex");
-
-			if (stop_signal) break;
-
-		}
-
-		//printf("Thread %ld waiting on local barrier 1\n", my_id);
-		pthread_barrier_wait (&workers_barrier1);
-		//printf("Thread %ld after local barrier 1\n", my_id);
 
 		// get a task
 		status = pthread_mutex_lock(&queue_mutex);
@@ -161,7 +133,7 @@ static void *do_work(void *args) {
 		if (status) err_abort(status, "unlock mutex");
 
 		//printf("Thread %ld waiting on local barrier 1.1\n", my_id);
-		pthread_barrier_wait (&workers_barrier1);
+		//pthread_barrier_wait (&workers_barrier1);
 		//printf("Thread %ld after local barrier 1.1\n", my_id);
 
 		if (has_task) { 
@@ -260,6 +232,8 @@ static void *do_work(void *args) {
 				tasks.push(local_tasks.front());
 				local_tasks.pop();
 			}
+   			std::queue<Task> empty;
+   			std::swap(local_tasks, empty);
 
 			status = pthread_mutex_unlock(&queue_mutex);
 			if (status) err_abort(status, "unlock mutex");
@@ -270,13 +244,34 @@ static void *do_work(void *args) {
 		pthread_barrier_wait (&workers_barrier1);
 		//printf("Thread %ld after local barrier 2\n", my_id);
 
-		//printf("Thread %ld with tasks %d\n", my_id, tasks.size());
-		// check stop condition && signal master
-		// if (tasks.empty()) {
-		// 							printf("Thread %ld waiting on global barrier 2\n", my_id);
-		// 	pthread_barrier_wait (&global_barrier2);
-		// 							printf("Thread %ld after global barrier 2\n", my_id);
-		// }
+		// Wait for master to put something in queue
+		//printf("Thread %ld tasks = %d\n", my_id, tasks.size());
+
+
+		if (tasks.empty()) {
+			//printf("Thread %ld waiting on global barrier 1\n", my_id);
+			pthread_barrier_wait (&global_barrier1);
+			//printf("Thread %ld after global barrier 1\n", my_id);
+			
+			// wait for work request
+			status = pthread_mutex_lock(&work_mutex);
+	        if (status) err_abort(status, "lock mutex");
+
+	        count++;
+			//printf("Thread %ld before signal\n", my_id);
+	        status = pthread_cond_wait(&work_cv, &work_mutex);
+	        if (status) err_abort(status, "wait for condition");
+	        //printf("Thread %ld after signal\n", my_id);
+
+	        status = pthread_mutex_unlock(&work_mutex);
+	        if (status) err_abort(status, "unlock mutex");
+		}
+
+		//printf("Thread %ld waiting on local barrier 3\n", my_id);
+		pthread_barrier_wait (&workers_barrier1);
+		//printf("Thread %ld after local barrier 3\n", my_id);
+
+		if (stop_signal) break;
 
 	} // endwhile thread
 
@@ -291,6 +286,7 @@ static void *master_work(void *args) {
 	int i, j;
 	int status;
 	long my_id = (long)args;
+	std::queue<Task> aux_tasks;
 
     stop_signal = false;
     count = 0;
@@ -318,18 +314,19 @@ static void *master_work(void *args) {
 
 				//printf("===========>Thread %ld creating TASk bx = %d by = %d ex = %d ey = %d -\n",
 				//my_id,tsk.block_x, tsk.block_y, tsk.entry_x, tsk.entry_y);
-    			tasks.push(tsk);
+				
 
 				// Signal threads to start work
-				printf("Thread %ld waiting on global barrier 1\n", my_id);
+				//printf("Thread %ld waiting on global barrier 1\n", my_id);
 				pthread_barrier_wait (&global_barrier1);
-				printf("Thread %ld after global barrier 1\n", my_id);
+				//printf("Thread %ld after global barrier 1\n", my_id);
 
        			while (count < NUM_THREADS - 1);
                 status = pthread_mutex_lock(&work_mutex);
                 if (status) err_abort(status, "lock mutex");
 
                 count = 0;
+                tasks.push(tsk);
                 status = pthread_cond_broadcast(&work_cv);
                 if (status) err_abort(status, "signal condition");
 
@@ -346,9 +343,9 @@ static void *master_work(void *args) {
 		}
 	}
 
-	printf("Thread %ld waiting on global barrier 1\n", my_id);
+	//printf("Thread %ld waiting on global barrier 1\n", my_id);
 	pthread_barrier_wait (&global_barrier1);
-	printf("Thread %ld after global barrier 1\n", my_id);
+	//printf("Thread %ld after global barrier 1\n", my_id);
 
 	while (count < NUM_THREADS - 1);
 	status = pthread_mutex_lock(&work_mutex);
@@ -396,6 +393,7 @@ int main(int argc, char *argv[]) {
 	pthread_barrier_init (&workers_barrier2, NULL, NUM_THREADS - 1);
 	pthread_barrier_init (&global_barrier1, NULL, NUM_THREADS);
 	pthread_barrier_init (&global_barrier2, NULL, NUM_THREADS);
+
 
 	pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
