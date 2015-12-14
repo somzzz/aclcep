@@ -35,7 +35,7 @@ pthread_mutex_t done_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t done_cv = PTHREAD_COND_INITIALIZER;
 
 pthread_mutex_t queue_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t visited_mutex = PTHREAD_MUTEX_INITIALIZER;   
+pthread_mutex_t visited_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 grayscaleimage image;
 grayscaleimage binary;
@@ -242,8 +242,8 @@ static void *do_work(void *args) {
 				tasks.push(local_tasks.front());
 				local_tasks.pop();
 			}
-   			std::queue<Task> empty;
-   			std::swap(local_tasks, empty);
+			std::queue<Task> empty;
+			std::swap(local_tasks, empty);
 
 			status = pthread_mutex_unlock(&queue_mutex);
 			if (status) err_abort(status, "unlock mutex");
@@ -264,16 +264,16 @@ static void *do_work(void *args) {
 			
 			// wait for work request
 			status = pthread_mutex_lock(&work_mutex);
-	        if (status) err_abort(status, "lock mutex");
+			if (status) err_abort(status, "lock mutex");
 
-	        count++;
+			count++;
 			//printf("Thread %ld before signal\n", my_id);
-	        status = pthread_cond_wait(&work_cv, &work_mutex);
-	        if (status) err_abort(status, "wait for condition");
-	        //printf("Thread %ld after signal\n", my_id);
+			status = pthread_cond_wait(&work_cv, &work_mutex);
+			if (status) err_abort(status, "wait for condition");
+			//printf("Thread %ld after signal\n", my_id);
 
-	        status = pthread_mutex_unlock(&work_mutex);
-	        if (status) err_abort(status, "unlock mutex");
+			status = pthread_mutex_unlock(&work_mutex);
+			if (status) err_abort(status, "unlock mutex");
 		}
 
 		//printf("Thread %ld waiting on local barrier 3\n", my_id);
@@ -284,9 +284,9 @@ static void *do_work(void *args) {
 
 	} // endwhile thread
 
-    // work done
+	// work done
 	// printf("Threads %ld, exiting \n", my_id );
-    pthread_exit(NULL);
+	pthread_exit(NULL);
 
 	return 0;
 }
@@ -296,29 +296,29 @@ static void *master_work(void *args) {
 	int status;
 	long my_id = (long)args;
 
-    stop_signal = false;
-    count = 0;
-    
-    status = pthread_mutex_lock(&work_mutex);
-    if (status) err_abort(status, "lock mutex");
+	stop_signal = false;
+	count = 0;
 
-    while (!work) {
-        status = pthread_cond_wait(&work_cv, &work_mutex);
-        if (status) err_abort(status, "wait for condition");
-    }
+	status = pthread_mutex_lock(&work_mutex);
+	if (status) err_abort(status, "lock mutex");
 
-    status = pthread_mutex_unlock(&work_mutex);
-    if (status) err_abort(status, "unlock mutex");
+	while (!work) {
+		status = pthread_cond_wait(&work_cv, &work_mutex);
+		if (status) err_abort(status, "wait for condition");
+	}
+
+	status = pthread_mutex_unlock(&work_mutex);
+	if (status) err_abort(status, "unlock mutex");
 
 	for (i = 0; i < color_image.ydim; i++) {
 		for (j = 0; j < color_image.xdim; j++) {
 
 			if (binary.value[i][j] == UNTOUCHED) {
 				Task tsk;
-    			tsk.block_y = i / CHUNK_SIZE * CHUNK_SIZE;
-    			tsk.block_x = j / CHUNK_SIZE * CHUNK_SIZE;
-    			tsk.entry_y = i; tsk.entry_x = j;
-    			tsk.color = color;
+				tsk.block_y = i / CHUNK_SIZE * CHUNK_SIZE;
+				tsk.block_x = j / CHUNK_SIZE * CHUNK_SIZE;
+				tsk.entry_y = i; tsk.entry_x = j;
+				tsk.color = color;
 
 				//printf("===========>Thread %ld creating TASk bx = %d by = %d ex = %d ey = %d -\n",
 				//my_id,tsk.block_x, tsk.block_y, tsk.entry_x, tsk.entry_y);
@@ -329,24 +329,24 @@ static void *master_work(void *args) {
 				pthread_barrier_wait (&global_barrier1);
 				//printf("Thread %ld after global barrier 1\n", my_id);
 
-       			while (count < NUM_THREADS - 1);
-                status = pthread_mutex_lock(&work_mutex);
-                if (status) err_abort(status, "lock mutex");
+				while (count < NUM_THREADS - 1);
+				status = pthread_mutex_lock(&work_mutex);
+				if (status) err_abort(status, "lock mutex");
 
-                count = 0;
-                tasks.push(tsk);
-                status = pthread_cond_broadcast(&work_cv);
-                if (status) err_abort(status, "signal condition");
+				count = 0;
+				tasks.push(tsk);
+				status = pthread_cond_broadcast(&work_cv);
+				if (status) err_abort(status, "signal condition");
 
-                status = pthread_mutex_unlock(&work_mutex);
-                if (status) err_abort(status, "unlock mutex");
-    			
-    			// Wait for threads to finish object
+				status = pthread_mutex_unlock(&work_mutex);
+				if (status) err_abort(status, "unlock mutex");
+
+				// Wait for threads to finish object
 				//printf("Thread %ld waiting on global barrier 2\n", my_id);
 				//pthread_barrier_wait (&global_barrier2);
 				//printf("Thread %ld after global barrier 2\n", my_id);
-                
-                color++;
+
+				color++;
 			}
 		}
 	}
@@ -358,7 +358,7 @@ static void *master_work(void *args) {
 	while (count < NUM_THREADS - 1);
 	status = pthread_mutex_lock(&work_mutex);
 	if (status) err_abort(status, "lock mutex");
-                
+
 	count = 0;
 	stop_signal = true;
 	status = pthread_cond_broadcast(&work_cv);
@@ -370,7 +370,7 @@ static void *master_work(void *args) {
 	// Signal threads to do one last round of work to see the stop_signal
 	// and exit properly
 	//printf("Threads %ld, exiting \n", my_id );
-    pthread_exit(NULL);
+	pthread_exit(NULL);
 }
 
 int main(int argc, char *argv[]) {
@@ -391,10 +391,10 @@ int main(int argc, char *argv[]) {
 	// Threads vars
 	int status;
 	long t;
-    pthread_t threads[NUM_THREADS];
-    pthread_attr_t attr;
+	pthread_t threads[NUM_THREADS];
+	pthread_attr_t attr;
 
-    work = false;
+	work = false;
 
 	// Start threads & create barrier
 	pthread_barrier_init (&workers_barrier1, NULL, NUM_THREADS - 1);
@@ -404,15 +404,15 @@ int main(int argc, char *argv[]) {
 
 
 	pthread_attr_init(&attr);
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
-    status = pthread_create(&threads[0], &attr, master_work, (void *)0);
-    if (status) err_abort(status, "create thread");
+	status = pthread_create(&threads[0], &attr, master_work, (void *)0);
+	if (status) err_abort(status, "create thread");
 
-    for (t = 1; t < NUM_THREADS; t++) {
-        status = pthread_create(&threads[t], &attr, do_work, (void *)t);
-        if (status) err_abort(status, "create thread");
-    }
+	for (t = 1; t < NUM_THREADS; t++) {
+		status = pthread_create(&threads[t], &attr, do_work, (void *)t);
+		if (status) err_abort(status, "create thread");
+	}
 
 	// Grab image, place in memory.
 
@@ -496,44 +496,44 @@ int main(int argc, char *argv[]) {
 	int maxi, maxj;
 	int maxx, maxy;
 
-    struct timespec start, stop;
-    double accum;
+	struct timespec start, stop;
+	double accum;
 
-    srand(time(NULL));
+	srand(time(NULL));
 
-    clock_gettime(CLOCK_REALTIME, &start);
+	clock_gettime(CLOCK_REALTIME, &start);
 
 
-    // Signal master to start working
-    status = pthread_mutex_lock(&work_mutex);
-    if (status) err_abort(status, "lock mutex");
+	// Signal master to start working
+	status = pthread_mutex_lock(&work_mutex);
+	if (status) err_abort(status, "lock mutex");
 
-    work = true;
+	work = true;
 
-    status = pthread_cond_signal(&work_cv);
-    if (status) err_abort(status, "signal condition");
+	status = pthread_cond_signal(&work_cv);
+	if (status) err_abort(status, "signal condition");
 
-    status = pthread_mutex_unlock(&work_mutex);
-    if (status) err_abort(status, "unlock mutex");
+	status = pthread_mutex_unlock(&work_mutex);
+	if (status) err_abort(status, "unlock mutex");
 
 
 	// Wait for all threads to complete
-    for (t = 0; t < NUM_THREADS; t++) {
-        pthread_join(threads[t], NULL);
-    }
-    printf ("Main(): Waited on %d threads. Done.\n", NUM_THREADS);
+	for (t = 0; t < NUM_THREADS; t++) {
+		pthread_join(threads[t], NULL);
+	}
+	printf ("Main(): Waited on %d threads. Done.\n", NUM_THREADS);
 
-    clock_gettime(CLOCK_REALTIME, &stop);
-
-
-    // Print time 
-    accum = ( stop.tv_sec - start.tv_sec )
-        + (double)( stop.tv_nsec - start.tv_nsec )
-        	/ (double)BILLION;
-    printf("[PTHREADS] Image segmentation: %lf\n", accum);
+	clock_gettime(CLOCK_REALTIME, &stop);
 
 
-    // Create output images
+	// Print time 
+	accum = ( stop.tv_sec - start.tv_sec )
+		+ (double)( stop.tv_nsec - start.tv_nsec )
+			/ (double)BILLION;
+	printf("[PTHREADS] Image segmentation: %lf\n", accum);
+
+
+	// Create output images
 	strcpy(color_image.name, "connected.ppm");
 	OutputPpm(&color_image);
 
@@ -542,19 +542,19 @@ int main(int argc, char *argv[]) {
 	OutputPgm(&binary);
 
 
-    /* Clean up and exit */
-    pthread_attr_destroy(&attr);
+	/* Clean up and exit */
+	pthread_attr_destroy(&attr);
 
-    pthread_mutex_destroy(&work_mutex);
-    pthread_cond_destroy(&work_cv);
+	pthread_mutex_destroy(&work_mutex);
+	pthread_cond_destroy(&work_cv);
 
-    pthread_mutex_destroy(&done_mutex);
-    pthread_cond_destroy(&done_cv);
+	pthread_mutex_destroy(&done_mutex);
+	pthread_cond_destroy(&done_cv);
 
-    pthread_mutex_destroy(&queue_mutex);
-    pthread_mutex_destroy(&visited_mutex);
+	pthread_mutex_destroy(&queue_mutex);
+	pthread_mutex_destroy(&visited_mutex);
 
-    pthread_exit(NULL);
+	pthread_exit(NULL);
 
 	return 0;
 }
