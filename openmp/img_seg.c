@@ -176,7 +176,10 @@ int main(int argc, char *argv[]) {
 									{
 											//create new task for others threads
 											struct Task new_task = generateTask(x, y, my_task->color, my_task->chunck, colorimage.xdim, colorimage.ydim);
-											task_queue.push(new_task);
+											#pragma omp critical
+											{
+												task_queue.push(new_task);
+											}
 											//printf("I'm thread %d and seed not in chunck %d %d\n", id, x, y);
 									}
 									if (is_in_chunck(x, y, my_task) && binary.value[x][y] == UNTOUCHED)
