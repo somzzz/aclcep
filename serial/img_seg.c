@@ -207,14 +207,17 @@ int main(int argc, char *argv[]) {
 
 	bool stillUntouched = true;
 
-	// Initialize by negation.
+
 	for (i = 0; i < binary.ydim; i++) {
 		for (j = 0; j < binary.xdim; j++) {
 			if (binary.value[i][j] == BLACK) {
 				binary.value[i][j] = UNTOUCHED;
 			}
+			//printf("%d ", binary.value[i][j]);
 		}
+		//printf("\n");
 	}
+
 
 	// Prepare to count objects.
 	int object1 = 0;
@@ -261,17 +264,17 @@ int main(int argc, char *argv[]) {
 
 					object1++;
 
-					if (tmparea < MINAREA && tmparea > 0) {
-						recursiveTouch(&binary, &colorimage, i, j, 0, 0);
-						removeSpecks(&binary, i, j);
-						remove1++;
-					}
+					// if (tmparea < MINAREA && tmparea > 0) {
+					// 	recursiveTouch(&binary, &colorimage, i, j, 0, 0);
+					// 	removeSpecks(&binary, i, j);
+					// 	remove1++;
+					// }
 
-					if (tmparea > maxarea) {
-						maxarea = tmparea;
-						maxi = i;
-						maxj = j;
-					}
+					// if (tmparea > maxarea) {
+					// 	maxarea = tmparea;
+					// 	maxi = i;
+					// 	maxj = j;
+					// }
 
 					color++;
 				}

@@ -10,7 +10,7 @@
 
 #define BILLION  	1000000000L;
 #define NUM_THREADS 9
-#define CHUNK_SIZE	500
+#define CHUNK_SIZE	100
 #define MASTER 		0
 
 // #define DEBUG_HISTOGRAM 1
