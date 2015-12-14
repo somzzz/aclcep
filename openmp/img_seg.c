@@ -19,10 +19,10 @@ std::queue<struct Task> task_queue;
 int main(int argc, char *argv[]) {
 	bool use_peakiness = true;
 	int num_images = 1;
-	if (argc != 2) {
+	/*if (argc != 2) {
 		printf("Usage: ./hw3-Chang inputimage.ppm \n");
 		exit(1);
-	}
+	}*/
 
 	// Loop iterators.
 	int i, j, k, x, y, z; 
@@ -42,7 +42,15 @@ int main(int argc, char *argv[]) {
 	/* ----- Peakiness Detection for Appropriate Threshold Selection ----- 
 	 * -------------------------------------------------------------------
 	 */
-
+	/*printf("--------------------------------------------\n");
+	for (i = 0; i < binary.ydim; i++)
+	{
+	 	for (j = 0; j < binary.xdim; j++)
+	 	{
+	 		printf("%d ", binary.value[i][j]);
+	 	}
+	 	printf("\n");
+	}*/
 	if (use_peakiness && num_images == 1) {
 		threshold = calculatePeakiness(&image, 0, image.xdim);
 	        printf("Threshold: %d\n", threshold);
@@ -113,42 +121,116 @@ int main(int argc, char *argv[]) {
 	} 
 
 	struct Task process_task;
-	struct Task* my_task = NULL;
+	struct Task* my_task = NULL;//(struct Task*)malloc(sizeof(struct Task));
 	int id;
 	int ok;
+	//int x, y;
 	omp_set_num_threads(nr_threads);
 
 	for (i = 0; i < colorimage.ydim; i++) {
 			for (j = 0; j < colorimage.xdim; j++) {
 				if (binary.value[i][j] == UNTOUCHED) {
+					//ok = false;
 					process_task = generateTask(i, j, color, latura, colorimage.xdim, colorimage.ydim);
+					//recursiveTouch(&binary, &colorimage, i, j, color, 0);
+					//printf("Print all parameters:seed: %d %d i,j start: %d %d, i,j stop: %d %d, chunck: %d, color %d, dims: %d %d\n",
+					// process_task.seed_i, process_task.seed_j, process_task.i_start, process_task.j_start, 
+					// process_task.i_stop, process_task.j_stop, process_task.chunck, process_task.color,
+					// colorimage.xdim, colorimage.ydim);
 					task_queue.push(process_task);
-					//tmparea = recursiveTouch(&binary, &colorimage, i, j, color, 0);
-					#pragma omp parallel private(my_task, id) firstprivate(i, j) shared(ok, task_queue, works_threads)
+					#pragma omp parallel private(my_task, id, x, y) firstprivate(i, j) shared(task_queue, works_threads, binary)
 					{
-						while(!task_queue.empty() || searchWork(works_threads, nr_threads))
+						while(1)
 						{
 							#pragma omp critical
 							{
 								if (!task_queue.empty())
 								{
-									ok = true;
-									my_task = &task_queue.front();
-									task_queue.pop();
 									id = omp_get_thread_num();
 									works_threads[id] = true;
+									my_task = &task_queue.front();
+									task_queue.pop();
+									//printf("Thread %d get from queue %d %d\n", id, my_task->seed_i, my_task->seed_j);
 								} else {
+									id = omp_get_thread_num();
+									works_threads[id] = false;
 									my_task = NULL;
+									//printf("Thread %d doesn't anything from queue \n", id);
 								}
 							}
-							tmparea = openmp_Touch(&binary, &colorimage, i, j, color, 0, my_task, &task_queue, omp_get_thread_num());
-							if (tmparea != 0)
-								printf("I'm thread %d nr with area %d\n", omp_get_thread_num(), tmparea);
-							works_threads[id] = false;
-						}
-					}					
+							if (my_task != NULL) 
+							{
+								//local bfs in chunck + create tasks for others
+								std::queue<struct Task> chunck_bfs;
+								struct Task local;// = *my_task;
+								memcpy(&local, my_task, sizeof(struct Task));
+								chunck_bfs.push(local);
+								//printf("I'm thread %d and I have seed %d %d %d %d\n", id, my_task->seed_i, my_task->seed_j,
+								//local.seed_i, local.seed_j);
+								while (!chunck_bfs.empty()) {
+									struct Task local_task = chunck_bfs.front();
+									chunck_bfs.pop();
+									x = local_task.seed_i; 
+									y = local_task.seed_j;
+									if (is_in_limits_matrix(x, y, colorimage.ydim, colorimage.xdim) && !is_in_chunck(x, y, my_task) && binary.value[x][y] == UNTOUCHED)
+									{
+											//create new task for others threads
+											struct Task new_task = generateTask(x, y, my_task->color, my_task->chunck, colorimage.xdim, colorimage.ydim);
+											#pragma omp critical
+											{
+												task_queue.push(new_task);
+											}
+											//printf("I'm thread %d and seed not in chunck %d %d\n", id, x, y);
+									}
+									if (is_in_chunck(x, y, my_task) && binary.value[x][y] == UNTOUCHED)
+									{
+											binary.value[x][y] = BLACK;
+											set_color(&colorimage, x, y, my_task->color);
+											//printf("Other hand thread %d with seed in chunck %d %d\n", id, x, y);
+											if (is_in_limits_matrix(x, y - 1, colorimage.ydim, colorimage.xdim) && binary.value[x][y-1] == UNTOUCHED) {
+												struct Task new_task = generateTask(x, y - 1, my_task->color, my_task->chunck, colorimage.xdim, colorimage.ydim);
+												chunck_bfs.push(new_task);
+											}
+											if (is_in_limits_matrix(x, y + 1, colorimage.ydim, colorimage.xdim) && binary.value[x][y+1] == UNTOUCHED) {
+												struct Task new_task = generateTask(x, y + 1, my_task->color, my_task->chunck, colorimage.xdim, colorimage.ydim);
+												chunck_bfs.push(new_task);	
+											}
+											if (is_in_limits_matrix(x - 1, y - 1, colorimage.ydim, colorimage.xdim) && binary.value[x-1][y-1] == UNTOUCHED) {
+												struct Task new_task = generateTask(x - 1, y - 1, my_task->color, my_task->chunck, colorimage.xdim, colorimage.ydim);
+												chunck_bfs.push(new_task);
+											}
+											if (is_in_limits_matrix(x - 1, y, colorimage.ydim, colorimage.xdim) && binary.value[x-1][y] == UNTOUCHED) {
+												struct Task new_task = generateTask(x - 1, y, my_task->color, my_task->chunck, colorimage.xdim, colorimage.ydim);
+												chunck_bfs.push(new_task);	
+											}
+											if (is_in_limits_matrix(x - 1, y + 1, colorimage.ydim, colorimage.xdim) && binary.value[x-1][y+1] == UNTOUCHED) {
+												struct Task new_task = generateTask(x - 1, y + 1, my_task->color, my_task->chunck, colorimage.xdim, colorimage.ydim);
+												chunck_bfs.push(new_task);	
+											}
+											if (is_in_limits_matrix(x + 1, y - 1, colorimage.ydim, colorimage.xdim) && binary.value[x+1][y-1] == UNTOUCHED) {
+												struct Task new_task = generateTask(x + 1, y - 1, my_task->color, my_task->chunck, colorimage.xdim, colorimage.ydim);
+												chunck_bfs.push(new_task);	
+											}
+											if (is_in_limits_matrix(x + 1, y, colorimage.ydim, colorimage.xdim) && binary.value[x+1][y] == UNTOUCHED) {
+												struct Task new_task = generateTask(x + 1, y, my_task->color, my_task->chunck, colorimage.xdim, colorimage.ydim);
+												chunck_bfs.push(new_task);	
+											}
+											if (is_in_limits_matrix(x + 1, y + 1, colorimage.ydim, colorimage.xdim) && binary.value[x+1][y+1] == UNTOUCHED) {
+												struct Task new_task = generateTask(x + 1, y + 1, my_task->color, my_task->chunck, colorimage.xdim, colorimage.ydim);
+												chunck_bfs.push(new_task);	
+											}
+									}
+								}//wnd while bfs
+								my_task = NULL;
+							}//end if my_task*/
+							//printf("Thread %d finish his job\n", id);
+							works_threads[id] = false;	
+							if (task_queue.empty() && !searchWork(works_threads, nr_threads))
+								break;
+						}//end while 1
+					}//parallel region					
 					color++;
-				}
+				}//end if
 			}
 	}
 
@@ -161,6 +243,5 @@ int main(int argc, char *argv[]) {
 
 	printf("\n");
 
-	/* ----- */
 	return 0;
 }

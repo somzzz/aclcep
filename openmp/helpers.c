@@ -422,7 +422,23 @@ struct Task generateTask(int x_coord, int  y_coord, int color, int chunck, int m
 	} else {
 		create_task.j_stop = create_task.j_start + chunck;
 	}
+	create_task.color = color;
+	create_task.chunck = chunck;
 	return create_task;
+}
+
+/*----------------------------------------------------*/
+int is_in_chunck(int x, int y, struct Task* task_limits)
+{
+	return (x >= task_limits->i_start && x < task_limits->i_stop &&
+			y >= task_limits->j_start && y < task_limits->j_stop); 
+}
+
+
+/*---------------------------------------------------*/
+int is_in_limits_matrix(int x, int y, int x_dim, int y_dim)
+{
+	return (x >= 0 && x < x_dim && y >= 0 && y < y_dim); 
 }
 
 /*--------------------------------------------------

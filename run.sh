@@ -16,3 +16,18 @@ then
 	cd ..;
 fi
 
+if [ "$1" == "openmp" ]
+then
+	cd openmp;
+	make clean; make;
+	qsub -cwd -q all.q run.sh;
+	cd ..;
+fi
+
+if [ "$1" == "mpi" ]
+then
+	cd mpi;
+	make clean; make;
+	qsub -cwd -q all.q run.sh;
+	cd ..;
+fi
