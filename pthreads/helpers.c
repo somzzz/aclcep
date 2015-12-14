@@ -5,8 +5,8 @@
 const int INF = 65535;
 const int WHITE = 255;
 const int BLACK = 0;
-const int UNTOUCHED = -1;
-const int TOUCH_IN_PROGRESS = -2;
+const int UNTOUCHED = 42;
+const int TOUCH_IN_PROGRESS = 69;
 const int MAXVAL = 200;
 const int MINAREA = 100;
 

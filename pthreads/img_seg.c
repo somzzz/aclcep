@@ -9,8 +9,8 @@
 #include "errors.h"
 
 #define BILLION  	1000000000L;
-#define NUM_THREADS 17
-#define CHUNK_SIZE	20
+#define NUM_THREADS 9
+#define CHUNK_SIZE	500
 #define MASTER 		0
 
 // #define DEBUG_HISTOGRAM 1
@@ -165,7 +165,8 @@ static void *do_work(void *args) {
 				//printf("Thread %ld, task i=  %d j = %d cell =%d \n", my_id, i, j, binary.value[i][j]);
 
 				// Found an untouched value in a neighbour chunk => give work to another thread
-				if (binary.value[i][j] == UNTOUCHED && !is_in_chunk(i, j, tsk.block_y, tsk.block_x)) {
+				if ((binary.value[i][j] == UNTOUCHED || binary.value[i][j] == TOUCH_IN_PROGRESS)
+					&& !is_in_chunk(i, j, tsk.block_y, tsk.block_x)) {
 					Task new_tsk;
 					new_tsk.entry_y = i; new_tsk.entry_x = j;
 					new_tsk.color = tsk.color;
@@ -179,7 +180,8 @@ static void *do_work(void *args) {
 				}
 
 				// Found an untouched value in the current chunk => process it
-				if (binary.value[i][j] == UNTOUCHED && is_in_chunk(i, j, tsk.block_y, tsk.block_x)) {
+				if ((binary.value[i][j] == UNTOUCHED || binary.value[i][j] == TOUCH_IN_PROGRESS)
+					&& is_in_chunk(i, j, tsk.block_y, tsk.block_x)) {
 			
 					// Visit current cell
 					binary.value[i][j] = BLACK;
@@ -462,6 +464,10 @@ int main(int argc, char *argv[]) {
 			}
 		}
 	}
+
+	// 	binary.highestvalue = WHITE;
+	// strcpy(binary.name, "interm_binary.pgm");
+	// OutputPgm(&binary);
 
 	// Prepare to count objects.
 	int object1 = 0;
