@@ -334,6 +334,7 @@ static void *master_work(void *args) {
 				if (status) err_abort(status, "lock mutex");
 
 				count = 0;
+				color++;
 				tasks.push(tsk);
 				status = pthread_cond_broadcast(&work_cv);
 				if (status) err_abort(status, "signal condition");
@@ -345,8 +346,6 @@ static void *master_work(void *args) {
 				//printf("Thread %ld waiting on global barrier 2\n", my_id);
 				//pthread_barrier_wait (&global_barrier2);
 				//printf("Thread %ld after global barrier 2\n", my_id);
-
-				color++;
 			}
 		}
 	}
