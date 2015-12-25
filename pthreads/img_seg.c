@@ -1,4 +1,5 @@
 
+#include <cstdlib>
 #include <math.h>
 #include <pthread.h>
 #include <queue>
@@ -9,8 +10,8 @@
 #include "errors.h"
 
 #define BILLION  	1000000000L;
-#define NUM_THREADS 9
-#define CHUNK_SIZE	1000
+//#define NUM_THREADS 9
+//#define CHUNK_SIZE	1000
 #define MASTER 		0
 
 // #define DEBUG_HISTOGRAM 1
@@ -50,6 +51,11 @@ int count;
 
 // Workpool
 std::queue<Task> tasks;
+
+// Args from cmd
+int CHUNK_SIZE;
+int NUM_THREADS;
+
 
 static bool is_in_chunk(int i, int j, int csy, int csx) {
 	int csxi = j / CHUNK_SIZE * CHUNK_SIZE;
@@ -378,10 +384,13 @@ int main(int argc, char *argv[]) {
 	bool use_peakiness = true;
 	int num_images = 1;
 
-	if (argc != 2) {
-		printf("Usage: ./img_seg inputimage.pgm \n");
+	if (argc != 4) {
+		printf("Usage: ./img_seg inputimage.pgm num_thr chunk_sz \n");
 		exit(1);
 	}
+
+	NUM_THREADS = atoi(argv[2]);
+	CHUNK_SIZE = atoi(argv[3]);
 
 	// Loop iterators.
 	int i, j, k, x, y, z; 
