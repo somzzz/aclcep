@@ -110,9 +110,11 @@ int main(int argc, char *argv[]) {
 	latura = trunc(sqrt(area_square / nr_threads));
 	printf("Calculated square chunck is: %d\n", latura);
 	int works_threads[nr_threads];
+	double time_per_thread[nr_threads];
 	for (i = 0; i < nr_threads; i++)
 	{
 		works_threads[i] = false;
+		time_per_thread[i] = 0.0;
 	} 
 	printf("Image is processed by %d threads and chunck processed by each thread is %d\n", nr_threads, chuncksize);
 	//set number of threads and start discover objects
@@ -129,6 +131,7 @@ int main(int argc, char *argv[]) {
 					//start the parallel region
 					#pragma omp parallel private(x, y, id, ok, my_task, local_tasks_threads) firstprivate(i, j) shared(works_threads, task_queue, binary)
 					{
+						double start_time = omp_get_wtime();
 						while(1)
 						{
 							//get task from queue if exists 
@@ -232,6 +235,7 @@ int main(int argc, char *argv[]) {
 								break;
 							}
 						}//end while 1
+						time_per_thread[id] += omp_get_wtime() - start_time;
 					}//end parallel region					
 					color++;
 				}//end if
@@ -242,6 +246,10 @@ int main(int argc, char *argv[]) {
 	elapsed_time = ( stop.tv_sec - start.tv_sec )
 				+ (double)( stop.tv_nsec - start.tv_nsec ) / (double)BILLION;
 	printf("[OPENMP] Image segmentation parallel region: %lf\n", elapsed_time);
+	for (i = 0; i < nr_threads; i++)
+	{
+		printf("Thread %d have worked %lf\n", i, time_per_thread[i]);
+	}
 
 	//write the images
 	srand(time(NULL));
