@@ -1,6 +1,3 @@
-// #define DEBUG_HISTOGRAM 1
-// #define DEBUG_PEAKINESS 1
-// #define DEBUG_ALPHA 1
 #include <queue>
 #include <omp.h>
 struct Task
@@ -21,6 +18,7 @@ const int BLACK = 0;
 const int UNTOUCHED = 42;
 const int MAXVAL = 200;
 const int MINAREA = 100;
+const int TOUCH_IN_PROGRESS = 69;
 
 // Loop iterators.
 int i, j, k, x;
@@ -93,48 +91,6 @@ int calculatePeakiness(grayscaleimage* image, int xstart, int xstop)
 		}
 	}
 
-#ifdef DEBUG_PEAKINESS
-	printf("Light: %d\n", light);
-	printf("Dark: %d\n", dark);
-#endif
-
-	if (!((xstart == 0) && (xstop == image->xdim))) {
-		printf("You are ever called in calculatePeakiness.....\n");
-		// Contrast normalization.
-		for (i = 1; i < image->ydim; i++) {
-			for (j = xstart + 1; j < xstop - 1; j++) {
-				// Reduce black pixels, replacing them with background.
-				if (image->value[i][j] <= dark + 18) {
-					sniperBlur(image, i, j, 15);
-				}
-
-				// Reduce white pixels, replacing them with background.
-				if (image->value[i][j] >= light - 18) {
-					sniperBlur(image, i, j, 15);
-				}
-			}
-		}
-
-		// Reevaluate histogram after contrast normalization.
-		for (i = 0; i < 256; i++) {
-			histogram[i] = 0;
-		}
-
-		for (i = 0; i < image->ydim; i++) {
-			for (j = xstart; j < xstop; j++) {
-				if (image->value[i][j] < light - 25) {
-					histogram[image->value[i][j]] += 1;
-				}
-			}
-		}
-	}
-
-#ifdef DEBUG_HISTOGRAM
-		for (i = 0; i < 256; i++) {
-			printf("histogram[%d]: %d\n", i, histogram[i]);
-		}
-#endif
-
 	// Grab highest value in the histogram.
 	g1 = 0;
 	gi = 0;
@@ -176,21 +132,14 @@ int calculatePeakiness(grayscaleimage* image, int xstart, int xstop)
 				}
 			}
 		} 
-
-#ifdef DEBUG_PEAKINESS
-		printf("Highest value %d found at histogram[%d].\n", g1, gi);
-		printf("2nd highest value %d found at histogram[%d].\n", g2, gj);
-		printf("Smallest value %d found between at histogram[%d].\n", gmin, gk);
-#endif
-
 		// Find the maximum peakiness.
-		/*if (g1 < g2) {
+		if (g1 < g2) {
 			peakiness = (double) g1 / (double) gmin;
 		}
 		else {
 			peakiness = (double) g2 / (double) gmin;
-		}*/
-		if (gmin == 0)
+		}
+		/*if (gmin == 0)
 		{
 			gmin = 1;
 			if (g1 < g2) {
@@ -206,23 +155,14 @@ int calculatePeakiness(grayscaleimage* image, int xstart, int xstop)
 			else {
 				peakiness = (double) g2 / (double) gmin;
 			}
-		}
+		}*/
 
 		if (peakiness > max_peakiness && peakiness != 0 && peakiness < INF) {
 			max_peakiness = peakiness;
 			threshold = gk;
 			used_distance = x;
 		}
-
-#ifdef DEBUG_PEAKINESS
-		printf("Peakiness: %f\n", peakiness);
-#endif
 	} // end minimum distance for loop
-#ifdef DEBUG_PEAKINESS
-	printf("Maximum Peakiness: %f at %d with distance %d\n", 
-			max_peakiness, threshold, used_distance);
-#endif
-
 	return threshold;
 }
 // }}}
