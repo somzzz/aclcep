@@ -1,4 +1,5 @@
 #!/bin/bash
+source $(dirname $0)/help.sh
 
 if [ "$1" == "serial" ]
 then
@@ -19,8 +20,13 @@ fi
 if [ "$1" == "openmp" ]
 then
 	cd openmp;
-	make clean; make;
-	qsub -cwd -q all.q run.sh;
+	files_to_delete;
+	delete_scripts_tests;
+	make;
+	#qsub -cwd -q all.q run.sh;
+	qsub -cwd -q ibm-nehalem12.q run.sh;
+	#echo $2 $3 $4
+	#qsub -cwd -q ibm-opteron.q run.sh;
 	cd ..;
 fi
 
