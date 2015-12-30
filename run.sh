@@ -23,10 +23,11 @@ then
 	files_to_delete;
 	delete_scripts_tests;
 	make;
-	#qsub -cwd -q all.q run.sh;
-	qsub -cwd -q ibm-nehalem12.q run.sh;
-	#echo $2 $3 $4
-	#qsub -cwd -q ibm-opteron.q run.sh;
+	echo "Choose queue for submit the job";
+	qstat -g c | cut -d ' ' -f1;
+	read queue;
+	qsub -cwd -q ${queue} -v image="$2",threads=$3,chunck=$4 run.sh;
+	#echo -e "\t${queue}" >> creioane.txt;
 	cd ..;
 fi
 
