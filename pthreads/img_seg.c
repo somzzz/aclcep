@@ -68,6 +68,25 @@ static bool is_in_matrix(int i, int j) {
 		&& (0 <= j && j < binary.xdim);
 }
 
+static bool has_neighbour_visited(int i, int j, int cy, int cx) {
+	int ii, jj, lcx, lcy;
+
+	for (ii = i - 1; ii <= i + 1; ii++) {
+		for (jj = j - 1; jj <= j + 1; jj++) {
+			lcx = jj / CHUNK_SIZE * CHUNK_SIZE;
+			lcy = ii / CHUNK_SIZE * CHUNK_SIZE;
+
+			if (lcx == cx && lcy == cy
+				&& is_in_matrix(ii, jj)
+				&& binary.value[ii][jj] == TOUCH_IN_PROGRESS) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
 static void put_color(int i, int j, int color) {
 
 	// Fun colors!
@@ -172,7 +191,8 @@ static void *do_work(void *args) {
 
 				// Found an untouched value in a neighbour chunk => give work to another thread
 				if ((binary.value[i][j] == UNTOUCHED || binary.value[i][j] == TOUCH_IN_PROGRESS)
-					&& !is_in_chunk(i, j, tsk.block_y, tsk.block_x)) {
+					&& !is_in_chunk(i, j, tsk.block_y, tsk.block_x)
+					&& !has_neighbour_visited(i, j, tsk.block_y, tsk.block_x)) {
 					Task new_tsk;
 					new_tsk.entry_y = i; new_tsk.entry_x = j;
 					new_tsk.color = tsk.color;
