@@ -14,7 +14,7 @@ typedef struct {
   int xdim;
   int ydim;
   int highestvalue; 
-  unsigned char **value; 
+  unsigned char *value; 
 } grayscaleimage;
 
 typedef struct {
@@ -22,9 +22,9 @@ typedef struct {
   int xdim;
   int ydim;
   int highestvalue; 
-  unsigned char **r; 
-  unsigned char **g; 
-  unsigned char **b; 
+  unsigned char *r; 
+  unsigned char *g; 
+  unsigned char *b; 
 } rgbimage;
 
 

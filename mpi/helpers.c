@@ -54,7 +54,7 @@ int calculatePeakiness(grayscaleimage* image, int xstart, int xstop)
 
 	for (i = 0; i < image->ydim; i++) {
 		for (j = xstart; j < xstop; j++) {
-			histogram[image->value[i][j]] += 1;
+			histogram[image->value[i * image->xdim + j]] += 1;
 		}
 	}
 
@@ -92,12 +92,12 @@ int calculatePeakiness(grayscaleimage* image, int xstart, int xstop)
 		for (i = 1; i < image->ydim; i++) {
 			for (j = xstart + 1; j < xstop - 1; j++) {
 				// Reduce black pixels, replacing them with background.
-				if (image->value[i][j] <= dark + 18) {
+				if (image->value[i * image->xdim + j] <= dark + 18) {
 					sniperBlur(image, i, j, 15);
 				}
 
 				// Reduce white pixels, replacing them with background.
-				if (image->value[i][j] >= light - 18) {
+				if (image->value[i * image->xdim + j] >= light - 18) {
 					sniperBlur(image, i, j, 15);
 				}
 			}
@@ -110,8 +110,8 @@ int calculatePeakiness(grayscaleimage* image, int xstart, int xstop)
 
 		for (i = 0; i < image->ydim; i++) {
 			for (j = xstart; j < xstop; j++) {
-				if (image->value[i][j] < light - 25) {
-					histogram[image->value[i][j]] += 1;
+				if (image->value[i * image->xdim + j] < light - 25) {
+					histogram[image->value[i * image->xdim + j]] += 1;
 				}
 			}
 		}
@@ -206,7 +206,7 @@ void normalizeBackground(grayscaleimage* binary, int xstart, int xstop) {
 	int i, j;
 	for (i = 0; i < binary->ydim; i++) {
 		for (j = xstart; j < xstop; j++) {
-			if (binary->value[i][j] == BLACK) {
+			if (binary->value[i * binary->xdim + j] == BLACK) {
 				area++;
 			}
 		}
@@ -217,11 +217,11 @@ void normalizeBackground(grayscaleimage* binary, int xstart, int xstop) {
 		printf("Inverting binary image.\n");
 		for (i = 0; i < binary->ydim; i++) {
 			for (j = xstart; j < xstop; j++) {
-				if (binary->value[i][j] == BLACK) {
-					binary->value[i][j] = WHITE;
+				if (binary->value[i * binary->xdim + j] == BLACK) {
+					binary->value[i * binary->xdim + j] = WHITE;
 				}
 				else {
-					binary->value[i][j] = BLACK;
+					binary->value[i * binary->xdim + j] = BLACK;
 				}
 			}
 		}
@@ -240,7 +240,7 @@ void calculateOrientation(grayscaleimage *binary, int xstart, int xstop, int are
 	double ybar = 0;
 	for (i = 0; i < binary->ydim; i++) {
 		for (j = xstart; j < xstop; j++) {
-			if (binary->value[i][j] == UNTOUCHED) {
+			if (binary->value[i * binary->xdim + j] == UNTOUCHED) {
 				xbar += j;
 				ybar += i;
 			}
@@ -258,15 +258,15 @@ void calculateOrientation(grayscaleimage *binary, int xstart, int xstop, int are
 	for (i = 0; i < binary->ydim; i++) {
 		for (j = xstart; j < xstop; j++) {
 			if (i == (int) ybar && j == (int) xbar) {
-				binary->value[i-2][j] = 128;
-				binary->value[i-1][j] = 128;
-				binary->value[i+1][j] = 128;
-				binary->value[i+2][j] = 128;
-				binary->value[i][j] = 128;
-				binary->value[i][j-2] = 128;
-				binary->value[i][j-1] = 128;
-				binary->value[i][j+1] = 128;
-				binary->value[i][j+2] = 128;
+				binary->value[(i-2) * binary-> xdim + j] = 128;
+				binary->value[(i-1) * binary-> xdim + j] = 128;
+				binary->value[(i+1) * binary-> xdim + j] = 128;
+				binary->value[(i+2) * binary-> xdim + j] = 128;
+				binary->value[i * binary->xdim + j] = 128;
+				binary->value[i * binary-> xdim + j - 2] = 128;
+				binary->value[i * binary-> xdim + j - 1] = 128;
+				binary->value[i * binary-> xdim + j + 1] = 128;
+				binary->value[i * binary-> xdim + j + 2] = 128;
 			}
 		}
 	}
@@ -276,7 +276,7 @@ void calculateOrientation(grayscaleimage *binary, int xstart, int xstop, int are
 	double a, b, c;
 	for (i = 0; i < binary->ydim; i++) {
 		for (j = xstart; j < xstop; j++) {
-			if (binary->value[i][j] == UNTOUCHED) {
+			if (binary->value[i * binary->xdim + j] == UNTOUCHED) {
 				a += pow(j - xbar, 2);
 				b += (j - xbar) * (i - ybar);
 				c += pow(i - ybar, 2);
@@ -327,73 +327,73 @@ void calculateOrientation(grayscaleimage *binary, int xstart, int xstop, int are
 int recursiveTouch(grayscaleimage *binary, rgbimage *output, 
 		int i, int j, int color, unsigned long area) 
 {
-	binary->value[i][j] = BLACK;
+	binary->value[i * binary->xdim + j] = BLACK;
 	area++;
 
 	// Fun colors!
 	if (color % 7 == 0) {
-		output->r[i][j] = 255;
-		output->g[i][j] = 255;
-		output->b[i][j] = 255;
+		output->r[i * binary->xdim + j] = 255;
+		output->g[i * binary->xdim + j] = 255;
+		output->b[i * binary->xdim + j] = 255;
 	}
 	else if (color % 7 == 1) {
-		output->r[i][j] = 0;
-		output->g[i][j] = 255;
-		output->b[i][j] = 0;
+		output->r[i * binary->xdim + j] = 0;
+		output->g[i * binary->xdim + j] = 255;
+		output->b[i * binary->xdim + j] = 0;
 	}
 	else if (color % 7 == 2) {
-		output->r[i][j] = 0;
-		output->g[i][j] = 0;
-		output->b[i][j] = 255;
+		output->r[i * binary->xdim + j] = 0;
+		output->g[i * binary->xdim + j] = 0;
+		output->b[i * binary->xdim + j] = 255;
 	}
 	else if (color % 7 == 3) {
-		output->r[i][j] = 255;
-		output->g[i][j] = 255;
-		output->b[i][j] = 0;
+		output->r[i * binary->xdim + j] = 255;
+		output->g[i * binary->xdim + j] = 255;
+		output->b[i * binary->xdim + j] = 0;
 	}
 	else if (color % 7 == 4) {
-		output->r[i][j] = 255;
-		output->g[i][j] = 0;
-		output->b[i][j] = 255;
+		output->r[i * binary->xdim + j] = 255;
+		output->g[i * binary->xdim + j] = 0;
+		output->b[i * binary->xdim + j] = 255;
 	}
 	else if (color % 7 == 5) {
-		output->r[i][j] = 0;
-		output->g[i][j] = 255;
-		output->b[i][j] = 255;
+		output->r[i * binary->xdim + j] = 0;
+		output->g[i * binary->xdim + j] = 255;
+		output->b[i * binary->xdim + j] = 255;
 	}
 	else {
-		output->r[i][j] = 255;
-		output->g[i][j] = 0;
-		output->b[i][j] = 0;
+		output->r[i * binary->xdim + j] = 255;
+		output->g[i * binary->xdim + j] = 0;
+		output->b[i * binary->xdim + j] = 0;
 	}
 
-	if (j - 1 >= 0 && binary->value[i][j-1] == UNTOUCHED) {
+	if (j - 1 >= 0 && binary->value[i * binary->xdim + j - 1] == UNTOUCHED) {
 		area = recursiveTouch(binary, output, i, j-1, color, area);
 	}
-	if (j + 1 < binary->xdim && binary->value[i][j+1] == UNTOUCHED) {
+	if (j + 1 < binary->xdim && binary->value[i * binary->xdim + j + 1] == UNTOUCHED) {
 		area = recursiveTouch(binary, output, i, j+1, color, area);
 	}
 
 	if (i - 1 >= 0) {
-		if (j - 1 >= 0 && binary->value[i-1][j-1] == UNTOUCHED) {
+		if (j - 1 >= 0 && binary->value[(i-1) * binary->xdim + j-1] == UNTOUCHED) {
 			area = recursiveTouch(binary, output, i-1, j-1, color, area);
 		}
-		if (binary->value[i-1][j] == UNTOUCHED) {
+		if (binary->value[(i-1) * binary->xdim + j] == UNTOUCHED) {
 			area = recursiveTouch(binary, output, i-1, j, color, area);
 		}
-		if (j + 1 < binary->xdim && binary->value[i-1][j+1] == UNTOUCHED) {
+		if (j + 1 < binary->xdim && binary->value[(i-1) * binary->xdim + j + 1] == UNTOUCHED) {
 			area = recursiveTouch(binary, output, i-1, j+1, color, area);
 		}
 	}
 
 	if (i + 1 < binary->ydim) {
-		if (j - 1 >= 0 && binary->value[i+1][j-1] == UNTOUCHED) {
+		if (j - 1 >= 0 && binary->value[(i+1) * binary->xdim + j - 1] == UNTOUCHED) {
 			area = recursiveTouch(binary, output, i+1, j-1, color, area);
 		}
-		if (binary->value[i+1][j] == UNTOUCHED) {
+		if (binary->value[(i+1) * binary->xdim + j] == UNTOUCHED) {
 			area = recursiveTouch(binary, output, i+1, j, color, area);
 		}
-		if (j + 1 < binary->xdim && binary->value[i+1][j+1] == UNTOUCHED) {
+		if (j + 1 < binary->xdim && binary->value[(i+1) * binary->xdim + j + 1] == UNTOUCHED) {
 			area = recursiveTouch(binary, output, i+1, j+1, color, area);
 		}
 	}
@@ -406,35 +406,35 @@ int recursiveTouch(grayscaleimage *binary, rgbimage *output,
 /* ------------------------------------------------------------------------*/
 // {{{
 void binaryTouch(grayscaleimage *binary, int i, int j) {
-	binary->value[i][j] = UNTOUCHED;
+	binary->value[i * binary->xdim + j] = UNTOUCHED;
 
-	if (j - 1 >= 0 && binary->value[i][j-1] == BLACK) {
+	if (j - 1 >= 0 && binary->value[i * binary->xdim + j - 1] == BLACK) {
 		binaryTouch(binary, i, j-1);
 	}
-	if (j + 1 < binary->xdim && binary->value[i][j+1] == BLACK) {
+	if (j + 1 < binary->xdim && binary->value[i * binary->xdim + j + 1] == BLACK) {
 		binaryTouch(binary, i, j+1);
 	}
 
 	if (i - 1 >= 0) {
-		if (j - 1 >= 0 && binary->value[i-1][j-1] == BLACK) {
+		if (j - 1 >= 0 && binary->value[(i-1) * binary->xdim + j - 1] == BLACK) {
 			binaryTouch(binary, i-1, j-1);
 		}
-		if (binary->value[i-1][j] == BLACK) {
+		if (binary->value[(i-1) * binary->xdim + j] == BLACK) {
 			binaryTouch(binary, i-1, j);
 		}
-		if (j + 1 < binary->xdim && binary->value[i-1][j+1] == BLACK) {
+		if (j + 1 < binary->xdim && binary->value[(i-1) * binary->xdim + j + 1] == BLACK) {
 			binaryTouch(binary, i-1, j+1);
 		}
 	}
 
 	if (i + 1 < binary->ydim) {
-		if (j - 1 >= 0 && binary->value[i+1][j-1] == BLACK) {
+		if (j - 1 >= 0 && binary->value[(i+1) * binary->xdim + j - 1] == BLACK) {
 			binaryTouch(binary, i+1, j-1);
 		}
-		if (binary->value[i+1][j] == BLACK) {
+		if (binary->value[(i+1) * binary->xdim + j] == BLACK) {
 			binaryTouch(binary, i+1, j);
 		}
-		if (j + 1 < binary->xdim && binary->value[i+1][j+1] == BLACK) {
+		if (j + 1 < binary->xdim && binary->value[(i+1) * binary->xdim + j + 1] == BLACK) {
 			binaryTouch(binary, i+1, j+1);
 		}
 	}
@@ -447,35 +447,35 @@ void binaryTouch(grayscaleimage *binary, int i, int j) {
 /* ------------------------------------------------------------------------*/
 //{{{
 void removeSpecks(grayscaleimage *binary, int i, int j) {
-	binary->value[i][j] = WHITE;
+	binary->value[i * binary->xdim + j] = WHITE;
 
-	if (j - 1 >= 0 && binary->value[i][j-1] == BLACK) {
+	if (j - 1 >= 0 && binary->value[i * binary->xdim + j - 1] == BLACK) {
 		removeSpecks(binary, i, j-1);
 	}
-	if (j + 1 < binary->xdim && binary->value[i][j+1] == BLACK) {
+	if (j + 1 < binary->xdim && binary->value[i * binary->xdim + j + 1] == BLACK) {
 		removeSpecks(binary, i, j+1);
 	}
 
 	if (i - 1 >= 0) {
-		if (j - 1 >= 0 && binary->value[i-1][j-1] == BLACK) {
+		if (j - 1 >= 0 && binary->value[(i - 1) * binary->xdim + j - 1] == BLACK) {
 			removeSpecks(binary, i-1, j-1);
 		}
-		if (binary->value[i-1][j] == BLACK) {
+		if (binary->value[(i-1) * binary->xdim + j] == BLACK) {
 			removeSpecks(binary, i-1, j);
 		}
-		if (j + 1 < binary->xdim && binary->value[i-1][j+1] == BLACK) {
+		if (j + 1 < binary->xdim && binary->value[(i - 1) * binary->xdim + j + 1] == BLACK) {
 			removeSpecks(binary, i-1, j+1);
 		}
 	}
 
 	if (i + 1 < binary->ydim) {
-		if (j - 1 >= 0 && binary->value[i+1][j-1] == BLACK) {
+		if (j - 1 >= 0 && binary->value[(i+1) * binary->xdim + j - 1] == BLACK) {
 			removeSpecks(binary, i+1, j-1);
 		}
-		if (binary->value[i+1][j] == BLACK) {
+		if (binary->value[(i+1) * binary->xdim + j] == BLACK) {
 			removeSpecks(binary, i+1, j);
 		}
-		if (j + 1 < binary->xdim && binary->value[i+1][j+1] == BLACK) {
+		if (j + 1 < binary->xdim && binary->value[(i+1) * binary->xdim + j + 1] == BLACK) {
 			removeSpecks(binary, i+1, j+1);
 		}
 	}
@@ -492,12 +492,12 @@ int findArea(grayscaleimage* main, grayscaleimage* binary, int a, int z) {
 	int tmp = 0;
 	for (i = 0; i < main->ydim; i++) {
 		for (j = a; j < z; j++) {
-			if (binary->value[i][j] == BLACK) {
-				main->value[i][j] = UNTOUCHED;
+			if (binary->value[i * main->xdim + j] == BLACK) {
+				main->value[i * main->xdim + j] = UNTOUCHED;
 				tmp++;
 			}
 			else {
-				main->value[i][j] = WHITE;
+				main->value[i * main->xdim + j] = WHITE;
 			}
 		}
 	}
@@ -514,10 +514,10 @@ int findArea(grayscaleimage* main, grayscaleimage* binary, int a, int z) {
 
 //{{{
 void backgroundize(grayscaleimage* image, int histogram_max, int xp, int yp) {
-	image->value[xp][yp] = 
-		(image->value[xp-1][yp-1] + 
-		 image->value[xp-1][yp] + 
-		 image->value[xp][yp-1]) / 3; 
+	image->value[xp * image->xdim + yp] = 
+		(image->value[(xp-1) * image->xdim + yp-1] + 
+		 image->value[(xp-1) * image->xdim + yp] + 
+		 image->value[xp * image->xdim + yp - 1]) / 3; 
 }
 //}}}
 
@@ -526,10 +526,10 @@ void sniperBlur(grayscaleimage* image, int xp, int yp, int times) {
 	int iter = 0;
 	for (iter = 0; iter < times; iter++) {
 		// Accentuates white while reducing black.
-		image->value[xp][yp] = 
-			(10 * image->value[xp-1][yp-1] + 
-			 5 * image->value[xp-1][yp] + 
-			 5 * image->value[xp][yp-1]) / 18; 
+		image->value[xp * image->xdim + yp] = 
+			(10 * image->value[(xp-1) * image->xdim + yp - 1] + 
+			 5 * image->value[(xp-1) * image->xdim + yp] + 
+			 5 * image->value[xp * image->xdim + yp - 1]) / 18; 
 		/*
 		   (image->value[xp-1][yp-1] + 
 		   image->value[xp-1][yp] + 
@@ -555,19 +555,19 @@ void simpleBlur(grayscaleimage image, int times) {
 		for (i = 1; i < image.ydim - 1; i++) {
 			for (j = 1; j < image.xdim - 1; j++) {
 				int tmp = 
-					image.value[i-1][j-1] + 
-					image.value[i-1][j] + 
-					image.value[i-1][j+1] + 
+					image.value[(i-1) * image.xdim + j - 1] + 
+					image.value[(i-1) * image.xdim + j] + 
+					image.value[(i-1) * image.xdim + j + 1] + 
 
-					image.value[i][j-1] + 
-					2 * image.value[i][j] + 
-					image.value[i][j+1] + 
+					image.value[i * image.xdim + j - 1] + 
+					2 * image.value[i * image.xdim + j] + 
+					image.value[i * image.xdim + j + 1] + 
 
-					image.value[i+1][j-1] + 
-					image.value[i+1][j] + 
-					image.value[i+1][j+1]; 
+					image.value[(i+1) * image.xdim + j - 1] + 
+					image.value[(i+1) * image.xdim + j] + 
+					image.value[(i+1) * image.xdim + j + 1]; 
 
-				image.value[i][j] = tmp / 10;
+				image.value[i * image.xdim + j] = tmp / 10;
 			}
 		}
 	}
@@ -582,19 +582,19 @@ void mediumBlur(grayscaleimage image, int times) {
 		for (i = 1; i < image.ydim - 1; i++) {
 			for (j = 1; j < image.xdim - 1; j++) {
 				int tmp = 
-					image.value[i-1][j-1] + 
-					2 * image.value[i-1][j] + 
-					image.value[i-1][j+1] + 
+					image.value[(i-1) * image.xdim + j - 1] + 
+					2 * image.value[(i-1) * image.xdim + j] + 
+					image.value[(i-1) * image.xdim + j + 1] + 
 
-					2 * image.value[i][j-1] + 
-					6 * image.value[i][j] + 
-					2 * image.value[i][j+1] + 
+					2 * image.value[i * image.xdim + j - 1] + 
+					6 * image.value[i * image.xdim + j] + 
+					2 * image.value[i * image.xdim + j+1] + 
 
-					image.value[i+1][j-1] + 
-					2 * image.value[i+1][j] + 
-					image.value[i+1][j+1]; 
+					image.value[(i+1) * image.xdim + j-1] + 
+					2 * image.value[(i+1) * image.xdim + j] + 
+					image.value[(i+1) * image.xdim + j + 1]; 
 
-				image.value[i][j] = tmp / 18;
+				image.value[i * image.xdim + j] = tmp / 18;
 			}
 		}
 	}
@@ -608,37 +608,37 @@ void gaussianBlur(grayscaleimage* image, int i, int j, int times) {
 	else {
 		for (k = 0; k < times; k++) {
 			int tmp = 
-				2 * image->value[i-2][j-2] + 
-				4 * image->value[i-2][j-1] + 
-				5 * image->value[i-2][j] + 
-				4 * image->value[i-2][j+1] + 
-				2 * image->value[i-2][j+2] + 
+				2 * image->value[(i-2) * image->xdim + j-2] + 
+				4 * image->value[(i-2) * image->xdim + j-1] + 
+				5 * image->value[(i-2) * image->xdim + j] + 
+				4 * image->value[(i-2) * image->xdim + j + 1] + 
+				2 * image->value[(i-2) * image->xdim + j + 2] + 
 
-				4 * image->value[i-1][j-2] +
-				9 * image->value[i-1][j-1] + 
-				12 * image->value[i-1][j] + 
-				9 * image->value[i-1][j+1] + 
-				4 * image->value[i-1][j+2] +
+				4 * image->value[(i-1) * image->xdim + j - 2] +
+				9 * image->value[(i-1) * image->xdim + j - 1] + 
+				12 * image->value[(i-1) * image->xdim + j] + 
+				9 * image->value[(i-1) * image->xdim + j + 1] + 
+				4 * image->value[(i-1) * image->xdim + j + 2] +
 
-				9 * image->value[i][j-2] + 
-				12 * image->value[i][j-1] + 
-				15 * image->value[i][j] + 
-				12 * image->value[i][j+1] + 
-				9 * image->value[i][j+2] + 
+				9 * image->value[i * image->xdim + j - 2] + 
+				12 * image->value[i * image->xdim + j - 1] + 
+				15 * image->value[i * image->xdim + j] + 
+				12 * image->value[i * image->xdim + j + 1] + 
+				9 * image->value[i * image->xdim + j + 2] + 
 
-				4 * image->value[i+1][j-2] +
-				9 * image->value[i+1][j-1] + 
-				12 * image->value[i+1][j] + 
-				9 * image->value[i+1][j+1] + 
-				4 * image->value[i+1][j+2] +
+				4 * image->value[(i+1) * image->xdim + j - 2] +
+				9 * image->value[(i+1) * image->xdim + j - 1] + 
+				12 * image->value[(i+1) * image->xdim + j] + 
+				9 * image->value[(i+1) * image->xdim + j + 1] + 
+				4 * image->value[(i+1) * image->xdim + j + 2] +
 
-				2 * image->value[i+2][j-2] + 
-				4 * image->value[i+2][j-1] + 
-				5 * image->value[i+2][j] + 
-				4 * image->value[i+2][j+1] + 
-				2 * image->value[i+2][j+2]; 
+				2 * image->value[(i+2) * image->xdim + j - 2] + 
+				4 * image->value[(i+2) * image->xdim + j - 1] + 
+				5 * image->value[(i+2) * image->xdim + j] + 
+				4 * image->value[(i+2) * image->xdim + j + 1] + 
+				2 * image->value[(i+2) * image->xdim + j + 2]; 
 
-			image->value[i][j] = tmp / 115;
+			image->value[i * image->xdim + j] = tmp / 115;
 		}
 	}
 }

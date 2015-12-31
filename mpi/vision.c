@@ -27,7 +27,7 @@ void OutputPgm(grayscaleimage* image)
   
   for(y = 0; y < image->ydim; y++) {
     for(x= 0; x < image->xdim; x++) 
-      fprintf(ofp,"%d ", image->value[y][x]);
+      fprintf(ofp,"%d ", image->value[y * image->xdim + x]);
     fprintf(ofp,"\n");
   }  
   fclose(ofp);  
@@ -51,9 +51,9 @@ void OutputPpm(rgbimage* image)
   
   for(y = 0; y < image->ydim; y++) {
     for(x= 0; x < image->xdim; x++) {
-      fprintf(ofp,"%d ", image->r[y][x]);
-      fprintf(ofp,"%d ", image->g[y][x]);
-      fprintf(ofp,"%d ", image->b[y][x]);
+      fprintf(ofp,"%d ", image->r[y * image->xdim + x]);
+      fprintf(ofp,"%d ", image->g[y * image->xdim + x]);
+      fprintf(ofp,"%d ", image->b[y * image->xdim + x]);
     }  
     fprintf(ofp,"\n");
   }  
@@ -114,22 +114,27 @@ void ScanPgm(grayscaleimage *image)
   // Allocate memory space for pixel values:
   GetImagePgm(image);
 
-  printf("Scan of %s, xdim = %d, ydim = %d highest = %d\n",
+  /*printf("Scan of %s, xdim = %d, ydim = %d highest = %d\n",
 	 image->name, image->xdim, image->ydim,
-	 image->highestvalue);
+	 image->highestvalue);*/
 
   /* Read the pixel values: */
   if (strcmp(buff, "P2") == 0) {
-    for (y = 0; y < image->ydim; y++)
-      for(x = 0; x < image->xdim; x++)
-        image->value[y][x] = (unsigned char) GetNextSignificantNumber(inputfp);
+    for (y = 0; y < image->ydim; y++) {
+      for(x = 0; x < image->xdim; x++) {
+        image->value[y * image->xdim + x] = (unsigned char) GetNextSignificantNumber(inputfp);
+      }
+    }
   }
   else if (strcmp(buff, "P5") == 0) {
     if ((ch = fgetc(inputfp)) != '\n')  
       ungetc(ch, inputfp);
-    for (y = 0; y < image->ydim; y++)
-      for(x = 0; x < image->xdim; x++)
-        image->value[y][x] = (unsigned char) fgetc(inputfp);
+    for (y = 0; y < image->ydim; y++) {
+      for(x = 0; x < image->xdim; x++) {
+        image->value[y * image->xdim + x] = (unsigned char) fgetc(inputfp);
+      }
+    }
+
   }
 
   fclose(inputfp);
@@ -163,17 +168,17 @@ void ScanPpm(rgbimage *image)
   // Allocate memory space for color pixel values:
   GetImagePpm(image);
 
-  printf("Scan of %s, xdim = %d, ydim = %d highest = %d\n",
+  /*printf("Scan of %s, xdim = %d, ydim = %d highest = %d\n",
 	 image->name, image->xdim, image->ydim,
-	 image->highestvalue);
+	 image->highestvalue);*/
 
   /* Read the pixel values: */
   if (strcmp(buff, "P3") == 0) {
     for (y = 0; y < image->ydim; y++)
       for(x = 0; x < image->xdim; x++) {
-        image->r[y][x] = (unsigned char) GetNextSignificantNumber(inputfp);
-        image->g[y][x] = (unsigned char) GetNextSignificantNumber(inputfp);
-        image->b[y][x] = (unsigned char) GetNextSignificantNumber(inputfp);
+        image->r[y * image->xdim + x] = (unsigned char) GetNextSignificantNumber(inputfp);
+        image->g[y * image->xdim + x] = (unsigned char) GetNextSignificantNumber(inputfp);
+        image->b[y * image->xdim + x] = (unsigned char) GetNextSignificantNumber(inputfp);
       }
     fscanf(inputfp, "\n");    
   }
@@ -182,9 +187,9 @@ void ScanPpm(rgbimage *image)
       ungetc(ch, inputfp);
     for (y = 0; y < image->ydim; y++)
       for(x = 0; x < image->xdim; x++) {
-        image->r[y][x] = (unsigned char) fgetc(inputfp);
-        image->g[y][x] = (unsigned char) fgetc(inputfp);
-        image->b[y][x] = (unsigned char) fgetc(inputfp);
+        image->r[y * image->xdim + x] = (unsigned char) fgetc(inputfp);
+        image->g[y * image->xdim + x] = (unsigned char) fgetc(inputfp);
+        image->b[y * image->xdim + x] = (unsigned char) fgetc(inputfp);
       }  
   }
 
@@ -199,19 +204,11 @@ void ScanPpm(rgbimage *image)
 void GetImagePgm(grayscaleimage *image)
 {
   int x, y;
-
-  image->value = (unsigned char **) malloc(image->ydim*sizeof(unsigned char *));
+  image->value = (unsigned char *) malloc(image->ydim * image->xdim * sizeof(unsigned char ));
     if(!image->value) {
 	printf("Can't allocate column of image pointers\n");
     	exit(1);
     }
-  for(y=0; y<image->ydim; y++){
-    image->value[y] = (unsigned char *) malloc(image->xdim*sizeof(unsigned char ));
-    if(!image->value[y]) {
-	printf("Can't allocate rows of gray-scale pixels\n");
-    	exit(1);
-    }
-  }
 }
 
 // Allocate memory space for color pixel values:
@@ -219,40 +216,20 @@ void GetImagePpm(rgbimage *image)
 {
   int x, y;
 
-  image->r = (unsigned char **) malloc(image->ydim*sizeof(unsigned char *));
+  image->r = (unsigned char *) malloc(image->ydim * image->xdim * sizeof(unsigned char ));
     if(!image->r) {
 	printf("Can't allocate column of red image pointers\n");
     	exit(1);
     }
-  image->g = (unsigned char **) malloc(image->ydim*sizeof(unsigned char *));
+  image->g = (unsigned char *) malloc(image->ydim * image->xdim * sizeof(unsigned char ));
     if(!image->g) {
 	printf("Can't allocate column of green image pointers\n");
     	exit(1);
     }
-  image->b = (unsigned char **) malloc(image->ydim*sizeof(unsigned char *));
+  image->b = (unsigned char *) malloc(image->ydim * image->xdim * sizeof(unsigned char ));
     if(!image->b) {
 	printf("Can't allocate column of blue image pointers\n");
     	exit(1);
     }
-  for(y=0; y<image->ydim; y++){
-    image->r[y] = (unsigned char *) malloc(image->xdim*sizeof(unsigned char ));
-    if(!image->r[y]) {
-	printf("Can't allocate red image rows\n");
-    	exit(1);
-    }
-  }
-  for(y=0; y<image->ydim; y++){
-    image->g[y] = (unsigned char *) malloc(image->xdim*sizeof(unsigned char ));
-    if(!image->g[y]) {
-	printf("Can't allocate green image rows\n");
-    	exit(1);
-    }
-  }
-  for(y=0; y<image->ydim; y++){
-    image->b[y] = (unsigned char *) malloc(image->xdim*sizeof(unsigned char ));
-    if(!image->b[y]) {
-	printf("Can't allocate blue image rows\n");
-    	exit(1);
-    }
-  }
+ 
 }
